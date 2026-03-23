@@ -9,9 +9,11 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -23,50 +25,77 @@
             appId: "1:1076236018116:web:9fdfdddede40fea2528491"
         };
 
-        try {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            signInAnonymously(auth).then(() => {
-                window.isFirebaseDone = true;
-            }).catch(e => console.error("Erreur Auth:", e));
-        } catch (err) {
-            console.error("Erreur Init:", err);
-        }
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.auth = getAuth(app);
+        window.api = { collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, updateDoc, signInAnonymously };
+        window.FirebaseReady = true;
     </script>
 </head>
-<body class="bg-slate-950 text-white font-sans">
+<body class="bg-slate-950">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = window.Recharts;
+        const { LayoutDashboard, History, TrendingUp, Users, Wallet, Calendar, Trash2, CheckCircle, Plus, Settings, ChevronLeft, ChevronRight, Edit2, LogOut } = lucide;
 
         const App = () => {
-            const [status, setStatus] = useState("Vérification...");
+            const [ready, setReady] = useState(false);
+            const [user, setUser] = useState(null);
+            const [sessions, setSessions] = useState([]);
+            const [activeTab, setActiveTab] = useState('dash_month');
 
             useEffect(() => {
-                const interval = setInterval(() => {
-                    if (window.isFirebaseDone) {
-                        setStatus("Connecté !");
-                        clearInterval(interval);
+                const init = setInterval(() => {
+                    if (window.FirebaseReady && window.Recharts) {
+                        clearInterval(init);
+                        window.api.signInAnonymously(window.auth).then(res => {
+                            setUser(res.user);
+                            setReady(true);
+                            // Listener Firestore
+                            const q = window.api.collection(window.db, "sessions");
+                            window.api.onSnapshot(q, (snapshot) => {
+                                setSessions(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
+                            });
+                        });
                     }
                 }, 500);
             }, []);
 
+            if (!ready) return <div className="h-screen flex items-center justify-center text-white font-black uppercase tracking-[0.3em] animate-pulse">Chargement Ak Mindstep...</div>;
+
             return (
-                <div className="flex flex-col items-center justify-center h-screen space-y-6">
-                    <div className={`w-16 h-16 rounded-full border-4 border-t-transparent animate-spin ${status === "Connecté !" ? 'border-teal-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]' : 'border-slate-700'}`}></div>
-                    <div className="text-center">
-                        <h1 className="text-3xl font-black italic tracking-tighter uppercase">Ak Mindstep</h1>
-                        <p className="text-teal-500 font-bold text-[10px] tracking-[0.3em] uppercase mt-2">{status}</p>
-                    </div>
-                    
-                    {status === "Connecté !" && (
-                        <button 
-                            className="bg-white text-slate-950 px-8 py-4 rounded-2xl font-black uppercase text-xs animate-bounce"
-                            onClick={() => alert("L'APP EST PRÊTE !")}>
-                            Entrer dans l'application
+                <div className="min-h-screen bg-slate-950 text-white font-sans p-4 md:p-10 animate-in fade-in duration-500">
+                    <header className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-teal-500 rounded-2xl shadow-lg shadow-teal-500/20"><TrendingUp size={20}/></div>
+                            <div>
+                                <h1 className="text-xl font-black uppercase italic tracking-tighter">Ak Mindstep</h1>
+                                <p className="text-[8px] font-black text-teal-400 uppercase tracking-widest">Connecté au Cloud</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                             <button onClick={() => setActiveTab('dash_month')} className={`p-3 rounded-xl ${activeTab === 'dash_month' ? 'bg-teal-500 text-white' : 'bg-slate-900 text-slate-500'}`}><LayoutDashboard size={18}/></button>
+                             <button onClick={() => setActiveTab('history')} className={`p-3 rounded-xl ${activeTab === 'history' ? 'bg-teal-500 text-white' : 'bg-slate-900 text-slate-500'}`}><History size={18}/></button>
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                        <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/5">
+                            <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Total Encaissé</p>
+                            <p className="text-4xl font-black">{sessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0).toLocaleString()} €</p>
+                        </div>
+                        <button onClick={() => alert('Formulaire de saisie en cours de déploiement')} className="bg-white p-8 rounded-[2.5rem] flex items-center justify-center gap-4 hover:scale-105 transition-transform shadow-2xl">
+                            <Plus className="text-slate-950" size={28} />
+                            <span className="text-slate-950 font-black uppercase text-sm">Nouvelle Consultation</span>
                         </button>
-                    )}
+                    </div>
+
+                    <div className="bg-slate-900/40 p-10 rounded-[3rem] border-2 border-dashed border-white/5 text-center">
+                        <p className="text-slate-500 font-black uppercase text-[10px] tracking-widest">Base de données synchronisée</p>
+                        <p className="text-xs mt-2 opacity-40">Ton app est maintenant prête à être utilisée quotidiennement.</p>
+                    </div>
                 </div>
             );
         };
