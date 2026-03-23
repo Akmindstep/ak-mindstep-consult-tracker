@@ -9,10 +9,11 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -26,89 +27,166 @@
 
         const app = initializeApp(firebaseConfig);
         window.db = getFirestore(app);
-        window.api = { collection, addDoc, onSnapshot, query, orderBy };
+        window.api = { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, updateDoc };
         const auth = getAuth(app);
-        signInAnonymously(auth).then(() => { window.isAuth = true; });
+        signInAnonymously(auth).then(res => { 
+            window.userUid = res.user.uid;
+            window.isAuth = true; 
+        });
     </script>
 </head>
-<body class="bg-slate-950 text-white font-sans">
+<body class="bg-slate-950">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } = window.Recharts;
+        const { LayoutDashboard, History, TrendingUp, Plus, Trash2, Calendar, MapPin, CheckCircle } = lucide;
 
         const App = () => {
+            const [ready, setReady] = useState(false);
+            const [activeTab, setActiveTab] = useState('dash');
             const [sessions, setSessions] = useState([]);
-            const [amount, setAmount] = useState('');
-            const [loading, setLoading] = useState(true);
+            const [formData, setFormData] = useState({ amount: '', cabinet: 'Koekelberg', category: 'Individuelle' });
 
             useEffect(() => {
-                const check = setInterval(() => {
-                    if (window.db && window.isAuth) {
-                        clearInterval(check);
+                const init = setInterval(() => {
+                    if (window.isAuth && window.Recharts) {
+                        clearInterval(init);
                         const q = window.api.query(window.api.collection(window.db, "sessions"), window.api.orderBy("date", "desc"));
                         window.api.onSnapshot(q, (snapshot) => {
                             setSessions(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
-                            setLoading(false);
+                            setReady(true);
                             setTimeout(() => lucide.createIcons(), 100);
                         });
                     }
                 }, 500);
             }, []);
 
-            const addSession = async (e) => {
+            const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (!amount) return;
+                if (!formData.amount) return;
                 await window.api.addDoc(window.api.collection(window.db, "sessions"), {
-                    amount: parseFloat(amount),
+                    ...formData,
+                    amount: parseFloat(formData.amount),
                     date: new Date().toISOString()
                 });
-                setAmount('');
+                setFormData({ ...formData, amount: '' });
+                setActiveTab('dash');
             };
 
-            const total = sessions.reduce((acc, s) => acc + s.amount, 0);
+            const totalCA = sessions.reduce((acc, s) => acc + s.amount, 0);
+            
+            // Données pour le graphique
+            const chartData = useMemo(() => {
+                const last7Days = [...new Array(7)].map((_, i) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+                    const dayAmount = sessions
+                        .filter(s => new Date(s.date).toDateString() === d.toDateString())
+                        .reduce((acc, s) => acc + s.amount, 0);
+                    return { name: dateStr, amount: dayAmount };
+                }).reverse();
+                return last7Days;
+            }, [sessions]);
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-black uppercase tracking-widest animate-pulse">Sync Ak Mindstep...</div>;
+            if (!ready) return <div className="h-screen flex items-center justify-center text-white font-black animate-pulse uppercase tracking-[0.3em]">Chargement complet...</div>;
 
             return (
-                <div className="max-w-md mx-auto p-6 md:pt-12">
-                    <header className="flex items-center gap-4 mb-10">
-                        <div className="w-12 h-12 bg-teal-500 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-500/20">
-                            <i data-lucide="trending-up" className="text-white w-6 h-6"></i>
+                <div className="min-h-screen bg-slate-950 text-white font-sans pb-24">
+                    {/* Header */}
+                    <header className="p-6 flex justify-between items-center border-b border-white/5">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-teal-500 rounded-lg"><TrendingUp size={18}/></div>
+                            <h1 className="font-black uppercase italic tracking-tighter text-lg">Ak Mindstep</h1>
                         </div>
-                        <h1 className="text-2xl font-black uppercase italic tracking-tighter">Ak Mindstep</h1>
+                        <div className="text-[10px] font-bold text-teal-500 px-3 py-1 bg-teal-500/10 rounded-full border border-teal-500/20">LIVE</div>
                     </header>
 
-                    <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/5 mb-6 text-center">
-                        <p className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">Total Encaissé</p>
-                        <p className="text-5xl font-black text-teal-400">{total.toLocaleString()} €</p>
-                    </div>
+                    <main className="p-6 max-w-2xl mx-auto">
+                        {activeTab === 'dash' && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                {/* Stats */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
+                                        <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Total CA</p>
+                                        <p className="text-3xl font-black">{totalCA.toLocaleString()}€</p>
+                                    </div>
+                                    <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
+                                        <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Séances</p>
+                                        <p className="text-3xl font-black text-teal-400">{sessions.length}</p>
+                                    </div>
+                                </div>
 
-                    <form onSubmit={addSession} className="bg-white p-8 rounded-[2.5rem] mb-10 shadow-2xl">
-                        <label className="text-slate-400 text-[10px] font-black uppercase block mb-4">Nouvelle Consultation (€)</label>
-                        <div className="flex gap-2">
-                            <input 
-                                type="number" 
-                                value={amount} 
-                                onChange={(e) => setAmount(e.target.value)}
-                                placeholder="Montant" 
-                                className="flex-1 bg-slate-100 border-none rounded-2xl p-4 text-slate-900 font-black text-xl outline-none focus:ring-2 ring-teal-500"
-                            />
-                            <button type="submit" className="bg-slate-950 p-4 rounded-2xl text-white">
-                                <i data-lucide="plus"></i>
-                            </button>
-                        </div>
-                    </form>
+                                {/* Graphique */}
+                                <div className="bg-slate-900/50 p-6 rounded-[2.5rem] border border-white/5 h-64">
+                                    <p className="text-[9px] font-black uppercase text-slate-500 mb-6 tracking-widest">Activité 7 derniers jours</p>
+                                    <ResponsiveContainer width="100%" height="80%">
+                                        <BarChart data={chartData}>
+                                            <Bar dataKey="amount" fill="#14b8a6" radius={[4, 4, 0, 0]} />
+                                            <Tooltip contentStyle={{backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', fontSize: '10px'}} cursor={{fill: 'rgba(255,255,255,0.05)'}}/>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
 
-                    <div className="space-y-3">
-                        <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4 ml-2">Historique récent</h2>
-                        {sessions.map(s => (
-                            <div key={s.id} className="bg-slate-900/50 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase">{new Date(s.date).toLocaleDateString()}</span>
-                                <span className="font-black text-teal-400">+{s.amount} €</span>
+                                {/* Liste Rapide */}
+                                <div className="space-y-3">
+                                    <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2">Derniers Encodages</h2>
+                                    {sessions.slice(0, 3).map(s => (
+                                        <div key={s.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black uppercase">{s.category}</span>
+                                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{s.cabinet}</span>
+                                            </div>
+                                            <span className="font-black text-teal-400">+{s.amount}€</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        ))}
-                    </div>
+                        )}
+
+                        {activeTab === 'add' && (
+                            <form onSubmit={handleSubmit} className="space-y-6 animate-in slide-in-from-bottom-4 duration-400">
+                                <h2 className="text-2xl font-black uppercase italic tracking-tighter">Nouvelle Séance</h2>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-2 block">Cabinet</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {['Koekelberg', 'Bruxelles-Sud'].map(c => (
+                                                <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`p-4 rounded-2xl font-black text-[10px] uppercase border transition-all ${formData.cabinet === c ? 'bg-white text-slate-950 border-white' : 'bg-slate-900 text-slate-500 border-white/5'}`}>{c}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-2 block">Service</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {['Individuelle', 'Couple', 'Famille'].map(s => (
+                                                <button key={s} type="button" onClick={() => setFormData({...formData, category: s})} className={`p-3 rounded-2xl font-black text-[8px] uppercase border transition-all ${formData.category === s ? 'bg-teal-500 text-white border-teal-500' : 'bg-slate-900 text-slate-500 border-white/5'}`}>{s}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-2 block">Montant (€)</label>
+                                        <input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full bg-slate-900 border-2 border-white/5 rounded-3xl p-6 text-3xl font-black text-teal-400 outline-none focus:border-teal-500 transition-all" placeholder="0.00"/>
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="w-full bg-white text-slate-950 p-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-white/5">Enregistrer la séance</button>
+                                <button type="button" onClick={() => setActiveTab('dash')} className="w-full text-slate-500 font-black uppercase text-[10px]">Annuler</button>
+                            </form>
+                        )}
+                    </main>
+
+                    {/* Navigation Mobile */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-xl border-t border-white/5 p-4 flex justify-around items-center">
+                        <button onClick={() => setActiveTab('dash')} className={`p-4 rounded-2xl transition-all ${activeTab === 'dash' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-500'}`}><LayoutDashboard size={20}/></button>
+                        <button onClick={() => setActiveTab('add')} className="w-14 h-14 bg-white rounded-full flex items-center justify-center -mt-12 shadow-2xl border-4 border-slate-950"><Plus size={24} className="text-slate-950"/></button>
+                        <button onClick={() => setActiveTab('history')} className={`p-4 rounded-2xl transition-all ${activeTab === 'history' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-500'}`}><History size={20}/></button>
+                    </nav>
                 </div>
             );
         };
