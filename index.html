@@ -8,12 +8,10 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -25,90 +23,50 @@
             appId: "1:1076236018116:web:9fdfdddede40fea2528491"
         };
 
-        const app = initializeApp(firebaseConfig);
-        window.db = getFirestore(app);
-        window.auth = getAuth(app);
-        window.api = { collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, updateDoc, signInAnonymously };
-        window.FirebaseReady = true;
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            signInAnonymously(auth).then(() => {
+                window.isFirebaseDone = true;
+            }).catch(e => console.error("Erreur Auth:", e));
+        } catch (err) {
+            console.error("Erreur Init:", err);
+        }
     </script>
 </head>
-<body class="bg-slate-950">
-    <div id="root">
-        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; color: white; font-family: sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em;">
-            Initialisation Ak Mindstep...
-        </div>
-    </div>
+<body class="bg-slate-950 text-white font-sans">
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         const App = () => {
-            const [ready, setReady] = useState(false);
-            const [user, setUser] = useState(null);
+            const [status, setStatus] = useState("Vérification...");
 
             useEffect(() => {
-                // Système de vérification des bibliothèques
-                const checkDependencies = setInterval(() => {
-                    if (window.Recharts && window.lucide && window.FirebaseReady) {
-                        clearInterval(checkDependencies);
-                        window.api.signInAnonymously(window.auth).then(res => {
-                            setUser(res.user);
-                            setReady(true);
-                            // On active les icônes lucide
-                            setTimeout(() => window.lucide.createIcons(), 100);
-                        });
+                const interval = setInterval(() => {
+                    if (window.isFirebaseDone) {
+                        setStatus("Connecté !");
+                        clearInterval(interval);
                     }
                 }, 500);
-                return () => clearInterval(checkDependencies);
             }, []);
 
-            if (!ready) return (
-                <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-white font-sans">
-                    <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50">Sécurisation du flux...</p>
-                </div>
-            );
-
             return (
-                <div className="min-h-screen bg-slate-950 text-white font-sans p-6 md:p-12 animate-in fade-in duration-700">
-                    <header className="flex justify-between items-center mb-12">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-teal-500 rounded-2xl shadow-lg shadow-teal-500/20">
-                                <i data-lucide="trending-up" className="text-white"></i>
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-black uppercase italic tracking-tighter leading-none">Ak Mindstep</h1>
-                                <p className="text-teal-500 text-[9px] font-black uppercase tracking-widest mt-1">Tracker de consultations</p>
-                            </div>
-                        </div>
-                        <div className="hidden md:block text-[9px] font-black bg-slate-900 border border-white/5 px-4 py-2 rounded-full opacity-50">
-                            ID: {user.uid.substring(0,8)}
-                        </div>
-                    </header>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 shadow-2xl backdrop-blur-sm">
-                            <p className="text-[9px] font-black uppercase text-slate-500 mb-3 tracking-widest">Chiffre d'Affaires</p>
-                            <p className="text-4xl font-black tabular-nums tracking-tighter">0,00 €</p>
-                        </div>
-                        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 shadow-2xl backdrop-blur-sm">
-                            <p className="text-[9px] font-black uppercase text-slate-500 mb-3 tracking-widest">Séances</p>
-                            <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></div>
-                                <p className="text-xl font-bold uppercase">Mode Encodage Prêt</p>
-                            </div>
-                        </div>
-                        <button className="bg-white p-8 rounded-[2.5rem] flex items-center justify-center gap-4 hover:bg-teal-400 transition-all group shadow-xl">
-                            <i data-lucide="plus" className="text-slate-950 group-hover:scale-125 transition-transform"></i>
-                            <span className="text-slate-950 font-black uppercase text-xs tracking-[0.1em]">Nouvelle Saisie</span>
+                <div className="flex flex-col items-center justify-center h-screen space-y-6">
+                    <div className={`w-16 h-16 rounded-full border-4 border-t-transparent animate-spin ${status === "Connecté !" ? 'border-teal-500 shadow-[0_0_20px_rgba(20,184,166,0.5)]' : 'border-slate-700'}`}></div>
+                    <div className="text-center">
+                        <h1 className="text-3xl font-black italic tracking-tighter uppercase">Ak Mindstep</h1>
+                        <p className="text-teal-500 font-bold text-[10px] tracking-[0.3em] uppercase mt-2">{status}</p>
+                    </div>
+                    
+                    {status === "Connecté !" && (
+                        <button 
+                            className="bg-white text-slate-950 px-8 py-4 rounded-2xl font-black uppercase text-xs animate-bounce"
+                            onClick={() => alert("L'APP EST PRÊTE !")}>
+                            Entrer dans l'application
                         </button>
-                    </div>
-
-                    <div className="p-20 bg-slate-900/30 rounded-[3rem] border-2 border-dashed border-white/5 text-center">
-                        <i data-lucide="history" className="mx-auto mb-4 opacity-20" size={32}></i>
-                        <p className="text-slate-500 font-black uppercase text-[10px] tracking-widest">Historique Vide</p>
-                        <p className="text-slate-600 text-xs mt-1">Tes futures données apparaîtront ici.</p>
-                    </div>
+                    )}
                 </div>
             );
         };
