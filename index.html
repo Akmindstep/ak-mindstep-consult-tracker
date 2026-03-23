@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -31,152 +30,91 @@
         signInAnonymously(auth).then(() => { window.isAuth = true; });
     </script>
 </head>
-<body class="bg-slate-950 text-white font-sans">
+<body class="bg-slate-950 text-white">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-        const { LayoutDashboard, History, TrendingUp, Plus, Trash2, MapPin, X } = lucide;
 
         const App = () => {
             const [ready, setReady] = useState(false);
-            const [activeTab, setActiveTab] = useState('dash');
+            const [tab, setTab] = useState('dash');
             const [sessions, setSessions] = useState([]);
-            const [formData, setFormData] = useState({ amount: '', cabinet: 'Koekelberg', category: 'Individuelle' });
+            const [amount, setAmount] = useState('');
+            const [cabinet, setCabinet] = useState('Koekelberg');
 
             useEffect(() => {
-                const init = setInterval(() => {
-                    if (window.isAuth) {
-                        clearInterval(init);
+                const interval = setInterval(() => {
+                    if (window.isAuth && window.db) {
+                        clearInterval(interval);
                         const q = window.api.query(window.api.collection(window.db, "sessions"), window.api.orderBy("date", "desc"));
                         window.api.onSnapshot(q, (snapshot) => {
                             setSessions(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
                             setReady(true);
-                            setTimeout(() => lucide.createIcons(), 100);
                         });
                     }
                 }, 500);
             }, []);
 
-            const handleSubmit = async (e) => {
+            const save = async (e) => {
                 e.preventDefault();
-                if (!formData.amount) return;
+                if(!amount) return;
                 await window.api.addDoc(window.api.collection(window.db, "sessions"), {
-                    ...formData,
-                    amount: parseFloat(formData.amount),
+                    amount: parseFloat(amount),
+                    cabinet: cabinet,
                     date: new Date().toISOString()
                 });
-                setFormData({ ...formData, amount: '' });
-                setActiveTab('dash');
+                setAmount('');
+                setTab('dash');
             };
 
-            const totalCA = sessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+            if (!ready) return <div className="h-screen flex items-center justify-center font-bold uppercase tracking-widest animate-pulse">Lancement...</div>;
 
-            if (!ready) return <div className="h-screen flex items-center justify-center font-black uppercase tracking-widest animate-pulse">Chargement Ak Mindstep...</div>;
+            const total = sessions.reduce((acc, s) => acc + (s.amount || 0), 0);
 
             return (
-                <div className="min-h-screen pb-24">
-                    <header className="p-6 flex justify-between items-center border-b border-white/5 bg-slate-950/50 backdrop-blur-md sticky top-0 z-50">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-teal-500 rounded-lg shadow-lg shadow-teal-500/20"><TrendingUp size={18}/></div>
-                            <h1 className="font-black uppercase italic tracking-tighter text-lg">Ak Mindstep</h1>
-                        </div>
+                <div className="max-w-md mx-auto min-h-screen flex flex-col p-6">
+                    <header className="mb-10 flex justify-between items-center">
+                        <h1 className="text-2xl font-black uppercase italic tracking-tighter">Ak Mindstep</h1>
+                        <span className="text-[10px] bg-teal-500/20 text-teal-400 px-3 py-1 rounded-full font-bold">ONLINE</span>
                     </header>
 
-                    <main className="p-6 max-w-2xl mx-auto">
-                        {activeTab === 'dash' && (
-                            <div className="space-y-6 animate-in fade-in">
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                                    <p className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest text-center">Chiffre d'Affaires Global</p>
-                                    <p className="text-5xl font-black text-center text-teal-400">{totalCA.toLocaleString()} €</p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-slate-900/50 p-6 rounded-[2rem] border border-white/5">
-                                        <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Séances</p>
-                                        <p className="text-2xl font-black">{sessions.length}</p>
-                                    </div>
-                                    <div className="bg-slate-900/50 p-6 rounded-[2rem] border border-white/5">
-                                        <p className="text-[9px] font-black uppercase text-slate-500 mb-1">Dernier</p>
-                                        <p className="text-2xl font-black text-teal-400">+{sessions[0]?.amount || 0}€</p>
-                                    </div>
-                                </div>
-
-                                <div className="pt-4">
-                                    <h2 className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-2 mb-4">Dernières consultations</h2>
-                                    <div className="space-y-3">
-                                        {sessions.slice(0, 5).map(s => (
-                                            <div key={s.id} className="bg-slate-900/80 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black uppercase tracking-tight">{s.category}</span>
-                                                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{s.cabinet}</span>
-                                                </div>
-                                                <span className="font-black text-teal-400">+{s.amount} €</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                    {tab === 'dash' && (
+                        <div className="space-y-6">
+                            <div className="bg-slate-900 p-8 rounded-[2rem] border border-white/5 text-center">
+                                <p className="text-[10px] font-bold uppercase text-slate-500 mb-2">Total Encaissé</p>
+                                <p className="text-5xl font-black text-teal-400">{total} €</p>
                             </div>
-                        )}
-
-                        {activeTab === 'add' && (
-                            <div className="animate-in slide-in-from-bottom-8">
-                                <form onSubmit={handleSubmit} className="space-y-8">
-                                    <h2 className="text-3xl font-black uppercase italic tracking-tighter">Nouvel Encodage</h2>
-                                    
-                                    <div className="space-y-6">
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-3 block">Choisir le Cabinet</label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {['Koekelberg', 'Bruxelles-Sud'].map(c => (
-                                                    <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`p-4 rounded-2xl font-black text-[10px] uppercase border transition-all ${formData.cabinet === c ? 'bg-white text-slate-950 border-white' : 'bg-slate-900 text-slate-500 border-white/5'}`}>{c}</button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-3 block">Type de Séance</label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {['Individuelle', 'Couple', 'Famille'].map(s => (
-                                                    <button key={s} type="button" onClick={() => setFormData({...formData, category: s})} className={`p-3 rounded-2xl font-black text-[8px] uppercase border transition-all ${formData.category === s ? 'bg-teal-500 text-white border-teal-500' : 'bg-slate-900 text-slate-500 border-white/5'}`}>{s}</button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="text-[9px] font-black uppercase text-slate-500 ml-2 mb-3 block">Honoraires (€)</label>
-                                            <input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full bg-slate-900 border-2 border-white/5 rounded-3xl p-6 text-4xl font-black text-teal-400 outline-none focus:border-teal-500 transition-all" placeholder="0.00"/>
-                                        </div>
-                                    </div>
-
-                                    <button type="submit" className="w-full bg-white text-slate-950 p-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl">Enregistrer la séance</button>
-                                    <button type="button" onClick={() => setActiveTab('dash')} className="w-full text-slate-500 font-black uppercase text-[10px] tracking-widest">Retour</button>
-                                </form>
-                            </div>
-                        )}
-
-                        {activeTab === 'history' && (
-                            <div className="space-y-4 animate-in fade-in">
-                                <h2 className="text-xl font-black uppercase mb-6 ml-2 tracking-widest">Historique complet</h2>
-                                {sessions.map(s => (
-                                    <div key={s.id} className="bg-slate-900/50 p-4 rounded-2xl border border-white/5 flex justify-between items-center group">
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-tight">{s.category}</p>
-                                            <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{new Date(s.date).toLocaleDateString()} • {s.cabinet}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-black text-teal-400">+{s.amount} €</p>
-                                        </div>
+                            
+                            <div className="space-y-3">
+                                <h2 className="text-[10px] font-bold uppercase text-slate-500 ml-2">Derniers encodages</h2>
+                                {sessions.slice(0, 5).map(s => (
+                                    <div key={s.id} className="bg-slate-900/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                                        <div className="text-[10px] font-bold uppercase">{s.cabinet}</div>
+                                        <div className="font-black text-teal-400">+{s.amount} €</div>
                                     </div>
                                 ))}
                             </div>
-                        )}
-                    </main>
+                        </div>
+                    )}
 
-                    <nav className="fixed bottom-6 left-6 right-6 h-20 bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] border border-white/5 flex justify-around items-center px-4 shadow-2xl z-50">
-                        <button onClick={() => setActiveTab('dash')} className={`p-4 rounded-2xl transition-all ${activeTab === 'dash' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-500'}`}><LayoutDashboard size={20}/></button>
-                        <button onClick={() => setActiveTab('add')} className="w-16 h-16 bg-white rounded-full flex items-center justify-center -mt-16 shadow-2xl border-4 border-slate-950 hover:scale-110 transition-transform"><Plus size={28} className="text-slate-950"/></button>
-                        <button onClick={() => setActiveTab('history')} className={`p-4 rounded-2xl transition-all ${activeTab === 'history' ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/20' : 'text-slate-500'}`}><History size={20}/></button>
+                    {tab === 'add' && (
+                        <form onSubmit={save} className="space-y-6">
+                            <h2 className="text-xl font-black uppercase">Nouvelle Séance</h2>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Koekelberg', 'Bruxelles-Sud'].map(c => (
+                                    <button key={c} type="button" onClick={() => setCabinet(c)} className={`p-4 rounded-2xl text-[10px] font-bold uppercase border ${cabinet === c ? 'bg-white text-black' : 'bg-slate-900 border-white/5'}`}>{c}</button>
+                                ))}
+                            </div>
+                            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Montant €" className="w-full bg-slate-900 p-6 rounded-3xl text-3xl font-black outline-none border-2 border-transparent focus:border-teal-500 text-teal-400" />
+                            <button type="submit" className="w-full bg-white text-black p-6 rounded-[2rem] font-bold uppercase">Enregistrer</button>
+                        </form>
+                    )}
+
+                    <nav className="fixed bottom-6 left-6 right-6 h-20 bg-slate-900 rounded-[2.5rem] border border-white/10 flex justify-around items-center px-4 shadow-2xl">
+                        <button onClick={() => setTab('dash')} className={`p-4 font-black ${tab === 'dash' ? 'text-teal-400' : 'text-slate-500'}`}>HOME</button>
+                        <button onClick={() => setTab('add')} className="w-14 h-14 bg-white rounded-full flex items-center justify-center -mt-12 border-4 border-slate-950 text-black font-black">+</button>
+                        <button onClick={() => setTab('dash')} className="p-4 font-black text-slate-500">LIST</button>
                     </nav>
                 </div>
             );
