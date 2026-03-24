@@ -31,10 +31,9 @@
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 overflow-x-hidden">
+<body class="bg-slate-950 text-slate-100 overflow-x-hidden transition-colors duration-300">
     <div id="root"></div>
 
-    <!-- Firebase SDK Setup -->
     <script type="importmap">
     {
       "imports": {
@@ -50,7 +49,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
         import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 
-        // --- CONFIGURATION FIREBASE CONNECTÉE ---
+        // --- CONFIGURATION FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyDV_kmvQC6yAtA95efs33S17SiYopp0r2c",
             authDomain: "ak-minstep-consult-tracker.firebaseapp.com",
@@ -72,11 +71,10 @@
             { id: 'settings', label: 'Réglages', icon: 'Settings' }
         ];
 
-        const COLORS_LIGHT = ['#1e293b', '#0d9488', '#334155', '#0891b2', '#d97706', '#4f46e5', '#10b981'];
+        const COLORS_LIGHT = ['#0f172a', '#0d9488', '#334155', '#0891b2', '#d97706', '#4f46e5', '#10b981'];
         const COLORS_DARK = ['#94a3b8', '#2dd4bf', '#cbd5e1', '#22d3ee', '#fbbf24', '#818cf8', '#34d399'];
-        const CABINET_COLORS = ['#0f172a', '#0d9488', '#0891b2', '#f59e0b'];
 
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = window.Recharts;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } = window.Recharts;
 
         // --- COMPOSANTS UI ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -95,27 +93,41 @@
         };
 
         const StatCard = ({ title, value, subValue, iconName, colorClass, isDarkMode }) => (
-            <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700 shadow-lg' : 'bg-white border-slate-200 shadow-sm'} p-6 rounded-2xl border flex flex-col gap-3 relative overflow-hidden transition-all`}>
+            <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700 shadow-lg' : 'bg-white border-slate-200 shadow-sm'} p-6 rounded-2xl border flex flex-col gap-3 transition-all`}>
                 <div className="flex items-center justify-between">
                     <span className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{title}</span>
-                    <div className={`w-8 h-8 rounded-lg ${colorClass} bg-opacity-20 flex items-center justify-center shrink-0`}>
+                    <div className={`w-8 h-8 rounded-lg ${colorClass} ${isDarkMode ? 'bg-opacity-20' : 'bg-opacity-10'} flex items-center justify-center shrink-0`}>
                         <Icon name={iconName} size={14} className={isDarkMode ? 'text-white' : colorClass.replace('bg-', 'text-')} />
                     </div>
                 </div>
                 <div className={`text-2xl font-black tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
-                {subValue && <div className={`text-[9px] font-bold uppercase tracking-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{subValue}</div>}
+                {subValue && <div className={`text-[9px] font-bold uppercase tracking-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>{subValue}</div>}
             </div>
         );
 
         const MiniStat = ({ label, value, iconName, isDarkMode }) => (
-            <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'} px-4 py-3 rounded-2xl border flex items-center gap-3`}>
-                <Icon name={iconName} size={14} className="text-teal-500" />
+            <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} px-4 py-3 rounded-2xl border flex items-center gap-3`}>
+                <Icon name={iconName} size={14} className="text-teal-600" />
                 <div>
-                    <p className="text-[8px] font-black uppercase tracking-widest opacity-50">{label}</p>
-                    <p className="text-sm font-black tracking-tight">{value}</p>
+                    <p className={`text-[8px] font-black uppercase tracking-widest ${isDarkMode ? 'opacity-50' : 'text-slate-500'}`}>{label}</p>
+                    <p className={`text-sm font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</p>
                 </div>
             </div>
         );
+
+        const renderPieLabel = (props, isDarkMode) => {
+            const { cx, cy, midAngle, innerRadius, outerRadius, value, name } = props;
+            if (!value) return null;
+            const RADIAN = Math.PI / 180;
+            const radius = outerRadius + 25;
+            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+            return (
+                <text x={x} y={y} fill={isDarkMode ? "#94a3b8" : "#475569"} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[10px] font-bold">
+                    {`${name}: ${value}`}
+                </text>
+            );
+        };
 
         function App() {
             const [user, setUser] = React.useState(null);
@@ -141,32 +153,23 @@
                 paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: ''
             });
 
-            // 1. Auth & Library Check
             React.useEffect(() => {
                 signInAnonymously(auth).catch(e => console.error("Auth error", e));
                 const unsubscribe = onAuthStateChanged(auth, setUser);
-                
                 const checkLibs = setInterval(() => {
-                    if (window.Recharts && window.lucide) {
-                        setLibsReady(true);
-                        clearInterval(checkLibs);
-                    }
+                    if (window.Recharts && window.lucide) { setLibsReady(true); clearInterval(checkLibs); }
                 }, 500);
-
                 return () => { unsubscribe(); clearInterval(checkLibs); };
             }, []);
 
-            // 2. Firestore Sync
             React.useEffect(() => {
                 if (!user) return;
-
                 const sessionsCol = collection(db, 'artifacts', appId, 'users', user.uid, 'sessions');
                 const unsubSessions = onSnapshot(sessionsCol, (snap) => {
                     const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setSessions(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
                     setLoading(false);
                 });
-
                 const settingsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
                 const unsubSettings = onSnapshot(settingsDoc, (snap) => {
                     if (snap.exists()) {
@@ -178,21 +181,17 @@
                         if (d.isDarkMode !== undefined) setIsDarkMode(d.isDarkMode);
                     }
                 });
-
                 return () => { unsubSessions(); unsubSettings(); };
             }, [user]);
 
             const updateSettings = async (newData) => {
                 if (!user) return;
-                const settingsDoc = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
-                await setDoc(settingsDoc, newData, { merge: true });
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), newData, { merge: true });
             };
 
-            // 3. Stats logic
             const stats = React.useMemo(() => {
                 const selYear = viewDate.getFullYear();
                 const selMonth = viewDate.getMonth();
-
                 const getPeriodData = (isYearly) => {
                     const filtered = sessions.filter(s => {
                         const d = new Date(s.date);
@@ -204,17 +203,17 @@
                     const attendu = filtered.filter(s => !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
                     const presCount = filtered.filter(s => s.modality === 'Présentiel').length;
                     const visioCount = filtered.filter(s => s.modality === 'Visio').length;
-
                     return { 
-                        encaisse, attendu, total: encaisse + attendu, 
-                        count: filtered.length, presCount, visioCount,
+                        encaisse, attendu, total: encaisse + attendu, count: filtered.length, presCount, visioCount,
                         catData: categories.map(c => ({ name: c, value: filtered.filter(s => s.category === c).length })),
                         modData: [{ name: 'Présentiel', value: presCount }, { name: 'Visio', value: visioCount }],
-                        payData: paymentMethods.map(p => ({ name: p, value: filtered.filter(s => s.paymentMethod === p && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) })),
+                        payData: paymentMethods.map(p => ({ 
+                            name: p, 
+                            value: filtered.filter(s => s.paymentMethod === p && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) 
+                        })),
                         items: filtered 
                     };
                 };
-
                 const comparison = Array.from({ length: 12 }, (_, i) => {
                     const entry = { name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i)) };
                     cabinets.forEach(cab => {
@@ -225,15 +224,18 @@
                     });
                     return entry;
                 });
-
                 return { month: getPeriodData(false), year: getPeriodData(true), comparison };
             }, [sessions, viewDate, filterCabinet, cabinets, categories, paymentMethods]);
 
-            // 4. Handlers
             const handleNav = (dir) => {
-                const type = activeTab === 'dash_month' ? 'month' : 'year';
-                if (type === 'month') setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + dir, 1));
+                if (activeTab === 'dash_month') setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + dir, 1));
                 else setViewDate(new Date(viewDate.getFullYear() + dir, viewDate.getMonth(), 1));
+            };
+
+            const resetToToday = () => setViewDate(new Date());
+
+            const togglePaid = async (s) => {
+                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', s.id), { isPaid: !s.isPaid });
             };
 
             const saveSession = async (e) => {
@@ -248,10 +250,6 @@
                     setActiveTab('history');
                 }
                 setFormData({ ...formData, amount: '', clientName: '', isCancellation: false });
-            };
-
-            const togglePaid = async (s) => {
-                await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', s.id), { isPaid: !s.isPaid });
             };
 
             const removeSession = async () => {
@@ -269,17 +267,13 @@
                 a.href = url; a.download = "ak_mindstep_export.csv"; a.click();
             };
 
-            const renderPieLabel = (props, isDarkMode) => {
-                const { cx, cy, midAngle, innerRadius, outerRadius, value } = props;
-                if (!value) return null;
-                const RADIAN = Math.PI / 180;
-                const radius = outerRadius + 15;
-                const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                return <text x={x} y={y} fill={isDarkMode ? "#cbd5e1" : "#475569"} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[10px] font-black">{value}</text>;
+            const startEditing = (s) => {
+                setFormData({ ...s, amount: s.amount.toString() });
+                setEditingSession(s);
+                setActiveTab('add');
             };
 
-            if (loading || !libsReady) return <div className="h-screen flex items-center justify-center bg-slate-950 text-teal-500 font-black uppercase tracking-widest animate-pulse text-xs">Synchronisation Ak Mindstep...</div>;
+            if (loading || !libsReady) return <div className="h-screen flex items-center justify-center bg-slate-950 text-teal-500 font-black uppercase tracking-widest animate-pulse text-xs">Synchronisation Cloud...</div>;
 
             const currentData = activeTab === 'dash_month' ? stats.month : stats.year;
             const title = activeTab === 'dash_month' ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(viewDate) : `Exercice ${viewDate.getFullYear()}`;
@@ -291,100 +285,155 @@
             const renderForm = (h, l) => (
                 <form onSubmit={h} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-2xl' : 'bg-white border-slate-200 shadow-xl'} p-8 rounded-psy border space-y-6`}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent focus:border-teal-500" /></div>
-                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Patient</label><input type="text" placeholder="Nom..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent focus:border-teal-500" /></div>
+                        <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-500'}`}>Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`} /></div>
+                        <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-500'}`}>Patient</label><input type="text" placeholder="Nom..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`} /></div>
                     </div>
-                    <div className="space-y-2"><label className="text-[9px] font-black uppercase opacity-40">Cabinet</label><div className="grid grid-cols-2 gap-2">{cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800'}`}>{c}</button>)}</div></div>
-                    <div className="space-y-2"><label className="text-[9px] font-black uppercase opacity-40">Service</label><div className="grid grid-cols-3 gap-2">{categories.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, category: c})} className={`py-4 rounded-3xl text-[8px] font-black uppercase border-2 transition-all ${formData.category === c ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800'}`}>{c}</button>)}</div></div>
-                    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Présentiel' ? 'bg-white text-slate-950' : 'border-slate-800 text-slate-600'}`}>Présentiel</button><button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Visio' ? 'bg-white text-slate-950' : 'border-slate-800 text-slate-600'}`}>Visio</button></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent focus:border-teal-500">{paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-500/10 text-teal-500' : 'bg-red-500 text-white'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button><button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white' : 'border-slate-800'}`}>Annulation</button></div>
+                    <div className="space-y-2">
+                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-500'}`}>Cabinet</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {cabinets.map(c => (
+                                <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${formData.cabinet === c ? (isDarkMode ? 'bg-teal-500 border-teal-500 text-slate-950' : 'bg-slate-900 border-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-500'}`}>Service</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {categories.map(c => (
+                                <button key={c} type="button" onClick={() => setFormData({...formData, category: c})} className={`py-4 rounded-3xl text-[8px] font-black uppercase border-2 transition-all ${formData.category === c ? (isDarkMode ? 'bg-teal-500 border-teal-500 text-slate-950' : 'bg-slate-900 border-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Présentiel' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Présentiel</button>
+                        <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Visio' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Visio</button>
+                    </div>
+                    <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-500'}`}>Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`}>{paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button><button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Annulation</button></div>
                     <div className="relative text-center">
-                        <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-teal-500 text-2xl opacity-40">€</span>
-                        <input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full py-10 rounded-psy bg-transparent border-2 border-slate-800 text-5xl font-black text-center outline-none focus:border-teal-500 transition-all" />
+                        <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-teal-600 text-2xl opacity-40">€</span>
+                        <input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-10 rounded-psy bg-transparent border-2 ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} text-5xl font-black text-center outline-none focus:border-teal-500 transition-all`} />
                     </div>
-                    <button type="submit" className="w-full py-6 rounded-psy bg-teal-500 text-slate-950 font-black uppercase tracking-[0.2em] shadow-xl hover:bg-teal-400">{l}</button>
+                    <button type="submit" className={`w-full py-6 rounded-psy ${isDarkMode ? 'bg-teal-500 text-slate-950' : 'bg-slate-900 text-white'} font-black uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all`}>{l}</button>
                 </form>
             );
 
             return (
                 <div className={`min-h-screen transition-all duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
-                    <header className="hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b transition-colors bg-slate-950/95 border-slate-900 backdrop-blur-xl">
-                        <div className="flex items-center gap-3"><div className="w-10 h-10 bg-teal-500 rounded-2xl flex items-center justify-center text-slate-950 shadow-lg"><Icon name="Activity" /></div><div><h1 className="text-xl font-black uppercase tracking-tighter leading-none">Ak Mindstep</h1><p className="text-[7px] font-black text-teal-500 uppercase tracking-widest mt-1">consult tracker</p></div></div>
-                        <nav className="flex gap-1 h-full">{NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingSession(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === t.id ? 'text-teal-400' : 'text-slate-500 hover:text-slate-300'}`}>{t.label}{activeTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-teal-500 rounded-t-full"/>}</button>)}</nav>
-                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className="p-3 rounded-xl border border-slate-800"><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18} /></button>
+                    
+                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b transition-colors ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200 shadow-sm'} backdrop-blur-xl`}>
+                        <div className="flex items-center gap-3"><div className={`w-10 h-10 bg-teal-500 rounded-2xl flex items-center justify-center ${isDarkMode ? 'text-slate-950' : 'text-white'} shadow-lg shadow-teal-500/20`}><Icon name="Activity" /></div><div><h1 className={`text-xl font-black uppercase tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Ak Mindstep</h1><p className="text-[7px] font-black text-teal-600 uppercase tracking-widest mt-1">consult tracker</p></div></div>
+                        <nav className="flex gap-1 h-full">{NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingSession(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === t.id ? 'text-teal-600' : (isDarkMode ? 'text-slate-500' : 'text-slate-400')}`}>{t.label}{activeTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-teal-500 rounded-t-full"/>}</button>)}</nav>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className={`p-3 rounded-xl border ${isDarkMode ? 'border-slate-800 hover:bg-slate-900' : 'border-slate-200 hover:bg-slate-100'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18} /></button>
                     </header>
 
                     <div className={`fixed z-[60] flex items-center group transition-all duration-300 md:bottom-8 md:right-8 bottom-28 right-6 ${activeTab === 'add' || editingSession ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}>
-                        <span className="mr-4 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none shadow-2xl hidden md:block">Encoder une séance</span>
-                        <button onClick={() => setActiveTab('add')} className="w-16 h-16 rounded-full shadow-2xl flex items-center justify-center bg-teal-500 text-slate-950"><Icon name="Plus" size={32} /></button>
+                        <button onClick={() => setActiveTab('add')} className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 ${isDarkMode ? 'bg-teal-500 hover:bg-teal-400' : 'bg-slate-900 hover:bg-black'} group-hover:scale-110`}>
+                            <Icon name="Plus" size={32} className={isDarkMode ? 'text-slate-950' : 'text-white'} />
+                        </button>
                     </div>
 
                     <main className="p-4 md:p-10 max-w-6xl mx-auto pb-48">
                         {(activeTab === 'dash_month' || activeTab === 'dash_year') && (
                             <div className="space-y-6 page-transition px-2">
                                 <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div className="flex items-center gap-3"><button onClick={() => handleNav(-1)} className="p-2 bg-slate-900 rounded-xl"><Icon name="ChevronLeft" /></button><h2 className="text-3xl font-black uppercase tracking-tighter">{title}</h2><button onClick={() => handleNav(1)} className="p-2 bg-slate-900 rounded-xl"><Icon name="ChevronRight" /></button>{!isCurrent && <button onClick={resetToToday} className="ml-2 p-2 bg-teal-500/10 text-teal-500 rounded-lg"><Icon name="RotateCcw" size={14}/></button>}</div>
-                                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800 max-w-full overflow-x-auto no-scrollbar"><button onClick={() => setFilterCabinet('Tous')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === 'Tous' ? 'bg-teal-500 text-white' : 'text-slate-500'}`}>Tous</button>{cabinets.map(cab => <button key={cab} onClick={() => setFilterCabinet(cab)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === cab ? 'bg-teal-500 text-white' : 'text-slate-500'}`}>{cab}</button>)}</div>
+                                    <div className="flex items-center gap-3"><button onClick={() => handleNav(-1)} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronLeft" size={24}/></button><h2 className="text-3xl font-black uppercase tracking-tighter">{title}</h2><button onClick={() => handleNav(1)} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronRight" size={24}/></button>{!isCurrent && <button onClick={resetToToday} className="ml-2 p-2 bg-teal-500/10 text-teal-600 rounded-lg"><Icon name="RotateCcw" size={14}/></button>}</div>
+                                    <div className={`flex items-center gap-1 p-1 rounded-xl max-w-full overflow-x-auto no-scrollbar ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200 shadow-inner'}`}><button onClick={() => setFilterCabinet('Tous')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === 'Tous' ? 'bg-teal-600 text-white shadow-lg' : (isDarkMode ? 'text-slate-500' : 'text-slate-500')}`}>Tous</button>{cabinets.map(cab => <button key={cab} onClick={() => setFilterCabinet(cab)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === cab ? 'bg-teal-600 text-white shadow-lg' : (isDarkMode ? 'text-slate-500' : 'text-slate-500')}`}>{cab}</button>)}</div>
                                 </header>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <StatCard isDarkMode={isDarkMode} title="CA Encaissé" value={`${currentData.encaisse.toLocaleString()} €`} subValue={`Total ${currentData.total}€`} iconName="Wallet" colorClass="bg-teal-600" />
-                                    <StatCard isDarkMode={isDarkMode} title="Impayés" value={`${currentData.attendu.toLocaleString()} €`} subValue={`${currentData.items.filter(s=>!s.isPaid).length} séances`} iconName="Clock" colorClass="bg-red-500" />
-                                    <StatCard isDarkMode={isDarkMode} title="Tarif Moyen" value={`${currentData.count > 0 ? (currentData.total / currentData.count).toFixed(0) : 0} €`} iconName="TrendingUp" colorClass="bg-teal-600" />
+                                    <StatCard isDarkMode={isDarkMode} title="Impayés" value={`${currentData.attendu.toLocaleString()} €`} subValue={`${currentData.items.filter(s=>!s.isPaid).length} séance(s)`} iconName="Clock" colorClass="bg-red-600" />
+                                    <StatCard isDarkMode={isDarkMode} title="Tarif Moyen" value={`${currentData.count > 0 ? (currentData.total / currentData.count).toFixed(0) : 0} €`} subValue={`${currentData.count} consultations total`} iconName="TrendingUp" colorClass="bg-teal-600" />
                                 </div>
                                 {activeTab === 'dash_month' && <div className="grid grid-cols-2 gap-4"><MiniStat isDarkMode={isDarkMode} label="Séances Présentiel" value={currentData.presCount} iconName="MapPin" /><MiniStat isDarkMode={isDarkMode} label="Séances Visio" value={currentData.visioCount} iconName="Video" /></div>}
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                    {[ { t: "Services", d: currentData.catData, c: tColors }, { t: "Modalités", d: currentData.modData, c: ['#1e293b', '#2dd4bf'] }, { t: "Paiements", d: currentData.payData, c: tColors.slice(3) } ].map((chart, i) => (
-                                        <div key={i} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'} p-6 rounded-psy border h-[320px] flex flex-col`}><h3 className="text-[9px] font-black uppercase tracking-widest mb-4 opacity-50">{chart.t}</h3><div className="flex-1"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={chart.d.filter(x => x.value > 0)} innerRadius={50} outerRadius={75} dataKey="value" stroke="none" label={(p) => renderPieLabel(p, isDarkMode)}>{chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}</Pie><Tooltip contentStyle={{ borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', fontSize: '10px' }} /><Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '9px', paddingTop: '15px' }} /></PieChart></ResponsiveContainer></div></div>
+                                    {[ 
+                                        { t: "Répartition Services", d: currentData.catData, c: tColors, type: "vol" }, 
+                                        { t: "Lieu des Séances", d: currentData.modData, c: [isDarkMode ? '#334155' : '#1e293b', '#2dd4bf'], type: "vol" }, 
+                                        { t: "CA par Paiement (€)", d: currentData.payData, c: tColors.slice(3), type: "val" } 
+                                    ].map((chart, i) => (
+                                        <div key={i} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border h-[340px] flex flex-col backdrop-blur-sm`}>
+                                            <h3 className="text-[9px] font-black uppercase tracking-widest mb-4 opacity-50">{chart.t}</h3>
+                                            <div className="flex-1">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie data={chart.d.filter(x => x.value > 0)} innerRadius={50} outerRadius={70} dataKey="value" stroke="none" label={(p) => renderPieLabel(p, isDarkMode)}>
+                                                            {chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}
+                                                        </Pie>
+                                                        <Tooltip 
+                                                            formatter={(v) => chart.type === "val" ? `${v.toLocaleString()} €` : `${v} séance(s)`}
+                                                            contentStyle={{ borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: '10px' }} 
+                                                        />
+                                                        <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '9px', paddingTop: '20px' }} />
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
-                                {activeTab === 'dash_year' && <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-psy h-[400px] flex flex-col shadow-2xl"><h3 className="text-[9px] font-black uppercase tracking-widest mb-6 opacity-50 text-center">Comparatif Cabinets (€)</h3><ResponsiveContainer width="100%" height="100%"><BarChart data={stats.comparison}><CartesianGrid vertical={false} stroke="#1e293b" /><XAxis dataKey="name" axisLine={false} tick={{fill: '#475569', fontSize: 10}} /><Tooltip contentStyle={{borderRadius: '15px', border: 'none', backgroundColor: '#0f172a'}} />{cabinets.map((c, i) => <Bar key={c} dataKey={c} fill={i === 0 ? '#2dd4bf' : '#1e293b'} radius={[5, 5, 0, 0]} barSize={25} />)}</BarChart></ResponsiveContainer></div>}
+                                {activeTab === 'dash_year' && (
+                                    <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-8 rounded-psy border h-[400px] flex flex-col shadow-2xl transition-all`}>
+                                        <h3 className="text-[9px] font-black uppercase tracking-widest mb-6 opacity-50 text-center">Évolution Mensuelle par Cabinet (€)</h3>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.comparison}>
+                                                <CartesianGrid vertical={false} stroke={isDarkMode ? '#1e293b' : '#f1f5f9'} />
+                                                <XAxis dataKey="name" axisLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                                                <YAxis hide />
+                                                <Tooltip formatter={(v) => `${v.toLocaleString()} €`} contentStyle={{borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', color: '#fff'}} />
+                                                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                                                {cabinets.map((c, i) => (
+                                                    <Bar key={c} dataKey={c} fill={i === 0 ? '#2dd4bf' : (isDarkMode ? '#1e293b' : '#cbd5e1')} radius={[5, 5, 0, 0]} barSize={25}>
+                                                        <LabelList dataKey={c} position="top" style={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 8, fontWeight: 'bold' }} formatter={(v) => v > 0 ? `${v}€` : ''} />
+                                                    </Bar>
+                                                ))}
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {activeTab === 'add' && <div className="max-w-lg mx-auto page-transition pt-4 px-2"><header className="mb-8 flex justify-between items-center px-2"><div><h2 className="text-2xl font-black uppercase tracking-tighter">Nouvelle Saisie</h2><p className="text-[10px] text-teal-500 font-bold uppercase tracking-widest mt-1">consult tracker</p></div><button onClick={() => setActiveTab('dash_month')} className="p-2 text-slate-500 hover:text-slate-300"><Icon name="X" size={24} /></button></header>{renderForm(saveSession, "Enregistrer la séance")}</div>}
+                        {activeTab === 'add' && <div className="max-w-lg mx-auto page-transition pt-4 px-2"><header className="mb-8 flex justify-between items-center px-2"><div><h2 className="text-2xl font-black uppercase tracking-tighter leading-none">{editingSession ? "Modification" : "Nouvelle Saisie"}</h2><p className="text-[10px] text-teal-600 font-bold uppercase tracking-widest mt-1">consult tracker</p></div><button onClick={() => { setActiveTab('dash_month'); setEditingSession(null); }} className={`p-2 rounded-full ${isDarkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}><Icon name="X" size={24} /></button></header>{renderForm(saveSession, "Enregistrer la séance")}</div>}
 
                         {activeTab === 'history' && (
                             <div className="space-y-4 page-transition px-2">
-                                <header className="flex justify-between items-center mb-8 px-4">
-                                    <h2 className="text-xl font-black uppercase tracking-tighter">Historique</h2>
-                                    <button onClick={handleExport} className="p-3 bg-slate-900 rounded-xl"><Icon name="FileSpreadsheet" size={18} /></button>
-                                </header>
-                                {sessions.map(s => (
-                                    <div key={s.id} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'} p-6 rounded-psy border flex items-center justify-between shadow-lg`}>
-                                        <div className="flex items-center gap-5"><div className="w-14 h-14 rounded-3xl bg-teal-500/10 flex items-center justify-center text-teal-500"><Icon name={s.category === 'Couple' ? 'Users' : 'User'} size={24} /></div><div><p className={`text-xs font-black uppercase ${s.isCancellation ? 'text-orange-500' : ''}`}>{s.category} {s.isCancellation && '- Annulé'}</p><p className="text-[10px] font-bold opacity-30 uppercase tracking-widest mt-1">{new Date(s.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})} • {s.cabinet}</p></div></div>
-                                        <div className="flex items-center gap-4"><div className="text-right"><p className="text-xl font-black tracking-tighter">{s.amount}€</p><button onClick={() => togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full ${s.isPaid ? 'bg-teal-500/10 text-teal-500 border border-teal-500/20' : 'bg-red-500 text-white shadow-lg'}`}>{s.isPaid ? 'Payé' : 'À payer'}</button></div><div className="flex flex-col gap-1"><button onClick={() => { startEditing(s); setActiveTab('add'); }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500"><Icon name="Edit2" size={14}/></button><button onClick={() => setDeleteId(s.id)} className="p-2 hover:bg-red-500/10 rounded-lg text-slate-500"><Icon name="Trash2" size={14}/></button></div></div>
-                                    </div>
-                                ))}
+                                <header className="flex justify-between items-center mb-8 px-4"><div className="flex items-center gap-3"><button onClick={() => setActiveTab('dash_month')} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ArrowLeft" /></button><h2 className="text-xl font-black uppercase tracking-tighter">Journal</h2></div><button onClick={handleExport} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} hover:scale-105 transition-all`}><Icon name="FileSpreadsheet" size={18} /></button></header>
+                                {sessions.length === 0 ? (
+                                    <div className="text-center py-32 space-y-6"><div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto opacity-20 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}><Icon name="Layout" size={40} /></div><p className="text-xs font-black uppercase tracking-widest opacity-40">Votre journal est vide</p><div className="flex flex-col gap-2 max-w-xs mx-auto"><button onClick={() => setActiveTab('add')} className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl transition-all ${isDarkMode ? 'bg-teal-500 text-slate-950' : 'bg-slate-900 text-white'}`}>Encoder une séance</button></div></div>
+                                ) : (
+                                    sessions.map(s => (
+                                        <div key={s.id} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border flex items-center justify-between shadow-lg transition-all`}>
+                                            <div className="flex items-center gap-5"><div className={`w-14 h-14 rounded-3xl flex items-center justify-center text-teal-600 ${isDarkMode ? 'bg-teal-500/10' : 'bg-teal-50 border border-teal-100'}`}><Icon name={s.category === 'Couple' ? 'Users' : 'User'} size={24} /></div><div><p className={`text-xs font-black uppercase ${s.isCancellation ? 'text-orange-500' : ''}`}>{s.category} {s.isCancellation && '- Annulé'}</p><p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isDarkMode ? 'opacity-30' : 'text-slate-400'}`}>{new Date(s.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})} • {s.cabinet}</p></div></div>
+                                            <div className="flex items-center gap-4"><div className="text-right"><p className="text-xl font-black tracking-tighter">{s.amount}€</p><button onClick={() => togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-600 border-teal-500/20' : 'bg-red-600 text-white border-red-600'}`}>{s.isPaid ? 'Payé' : 'À payer'}</button></div><div className="flex flex-col gap-1"><button onClick={() => startEditing(s)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800 text-slate-600 hover:text-teal-400' : 'hover:bg-slate-50 text-slate-400 hover:text-teal-600'}`}><Icon name="Edit2" size={14}/></button><button onClick={() => setDeleteId(s.id)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-500' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'}`}><Icon name="Trash2" size={14}/></button></div></div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         )}
 
                         {activeTab === 'settings' && (
                             <div className="max-w-lg mx-auto space-y-6 page-transition px-2">
                                 <h2 className="text-xl font-black uppercase tracking-tighter mb-8 text-center">Configuration</h2>
-                                <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'} p-8 rounded-psy border space-y-10`}>
-                                    <div className="flex items-center justify-between"><label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Thème Sombre</label><button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className={`w-14 h-8 rounded-full transition-all relative ${isDarkMode ? 'bg-teal-500' : 'bg-slate-800'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'left-7' : 'left-1'}`} /></button></div>
-                                    <div className="space-y-4 pt-4 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Interface Zoom</label><span className="text-teal-500 font-black text-xs">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e => { setZoomLevel(parseInt(e.target.value)); updateSettings({ zoomLevel: parseInt(e.target.value) }); }} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500 mr-4" /></div>
-                                    {[ { label: "Cabinets", state: cabinets, setter: setCabinets, icon: 'MapPin', key: 'cabinets' }, { label: "Types de Services", state: categories, setter: setCategories, icon: 'Stethoscope', key: 'categories' }, { label: "Moyens de Paiement", state: paymentMethods, setter: setPaymentMethods, icon: 'CreditCard', key: 'paymentMethods' } ].map((list, idx) => (
-                                        <div key={idx} className="space-y-4 pt-6 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Icon name={list.icon} size={12} /> {list.label}</p><button onClick={() => { const n = [...list.state, `Nouveau`]; list.setter(n); updateSettings({ [list.key]: n }); }} className="p-2 bg-teal-500/10 text-teal-500 rounded-lg"><Icon name="Plus" size={14}/></button></div><div className="space-y-2">{list.state.map((item, i) => (<div key={i} className="flex gap-2"><input type="text" value={item} onChange={e => { const n = [...list.state]; n[i] = e.target.value; list.setter(n); }} onBlur={() => updateSettings({ [list.key]: list.state })} className={`flex-1 p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] font-black outline-none focus:border-teal-500 ${isDarkMode ? 'text-white' : 'text-slate-900'}`} /><button onClick={() => { const n = list.state.filter((_, idx) => idx !== i); list.setter(n); updateSettings({ [list.key]: n }); }} disabled={list.state.length <= 1} className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl disabled:opacity-20 transition-all"><Icon name="X" size={16}/></button></div>))}</div></div>
+                                <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-lg'} p-8 rounded-psy border space-y-10`}>
+                                    <div className="space-y-6"><div className="flex items-center justify-between"><label className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Thème Sombre</label><button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className={`w-14 h-8 rounded-full transition-all relative ${isDarkMode ? 'bg-teal-500' : 'bg-slate-200'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'left-7' : 'left-1'}`} /></button></div><div className="space-y-4 pt-4 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><label className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Interface Zoom</label><span className="text-teal-600 font-black text-xs">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e => { setZoomLevel(parseInt(e.target.value)); updateSettings({ zoomLevel: parseInt(e.target.value) }); }} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500 mr-4" /></div></div>
+                                    {[ { label: "Cabinets", state: cabinets, icon: 'MapPin', key: 'cabinets' }, { label: "Types de Services", state: categories, icon: 'Stethoscope', key: 'categories' }, { label: "Moyens de Paiement", state: paymentMethods, icon: 'CreditCard', key: 'paymentMethods' } ].map((list, idx) => (
+                                        <div key={idx} className="space-y-4 pt-6 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}><Icon name={list.icon} size={12} /> {list.label}</p><button onClick={() => { const n = [...list.state, `Nouveau`]; updateSettings({ [list.key]: n }); }} className="p-2 bg-teal-500/10 text-teal-600 rounded-lg"><Icon name="Plus" size={14}/></button></div><div className="space-y-2">{list.state.map((item, i) => (<div key={i} className="flex gap-2"><input type="text" value={item} onChange={e => { const n = [...list.state]; n[i] = e.target.value; updateSettings({ [list.key]: n }); }} className={`flex-1 p-3 rounded-xl border text-[10px] font-black uppercase outline-none focus:border-teal-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} /><button onClick={() => { const n = list.state.filter((_, idx) => idx !== i); updateSettings({ [list.key]: n }); }} disabled={list.state.length <= 1} className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl disabled:opacity-20"><Icon name="X" size={16}/></button></div>))}</div></div>
                                     ))}
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-28 backdrop-blur-3xl border-t flex items-center justify-around px-6 z-50 transition-all ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200'}`}>
-                        {NAV_TABS.map(item => <button key={item.id} onClick={() => {setActiveTab(item.id); setEditingSession(null);}} className={`flex flex-col items-center gap-2 transition-all ${activeTab === item.id ? 'text-teal-400 scale-110 font-black' : 'text-slate-600 opacity-60'}`}><div className={`p-2 rounded-2xl ${activeTab === item.id ? 'bg-teal-500/10' : ''}`}><Icon name={item.id === 'dash_month' ? 'Calendar' : item.id === 'dash_year' ? 'BarChart3' : item.id === 'history' ? 'BookOpen' : 'Settings'} size={24} /></div><span className="text-[7px] font-black uppercase tracking-widest">{item.label}</span></button>)}
+                    <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-28 backdrop-blur-3xl border-t flex items-center justify-around px-6 z-50 transition-all ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]'}`}>
+                        {NAV_TABS.map(item => <button key={item.id} onClick={() => {setActiveTab(item.id); setEditingSession(null);}} className={`flex flex-col items-center gap-2 transition-all ${activeTab === item.id ? 'text-teal-600 scale-110 font-black' : 'text-slate-500 opacity-60'}`}><div className={`p-2 rounded-2xl ${activeTab === item.id ? 'bg-teal-500/10' : ''}`}><Icon name={item.id === 'dash_month' ? 'Calendar' : item.id === 'dash_year' ? 'BarChart3' : item.id === 'history' ? 'BookOpen' : 'Settings'} size={24} /></div><span className="text-[7px] font-black uppercase tracking-widest">{item.label}</span></button>)}
                     </nav>
 
                     {deleteId && (
-                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-                            <div className="bg-slate-900 border border-slate-800 p-8 rounded-psy w-full max-w-xs text-center space-y-6 shadow-2xl">
-                                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto"><Icon name="AlertCircle" size={32} /></div>
-                                <h3 className="font-black uppercase tracking-tighter">Supprimer ?</h3>
-                                <div className="flex gap-2"><button onClick={() => setDeleteId(null)} className="flex-1 py-4 rounded-2xl bg-slate-800 text-[10px] font-black uppercase">Non</button><button onClick={removeSession} className="flex-1 py-4 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase shadow-lg">Oui</button></div>
-                            </div>
-                        </div>
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6"><div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-8 rounded-psy w-full max-w-xs text-center space-y-6 shadow-2xl border`}><div className="w-16 h-16 bg-red-500/10 text-red-600 rounded-full flex items-center justify-center mx-auto"><Icon name="AlertCircle" size={32} /></div><h3 className={`font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supprimer ?</h3><div className="flex gap-2"><button onClick={() => setDeleteId(null)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Non</button><button onClick={removeSession} className="flex-1 py-4 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase shadow-lg">Oui</button></div></div></div>
                     )}
                 </div>
             );
