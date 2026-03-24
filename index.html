@@ -158,7 +158,8 @@
             const [formData, setFormData] = React.useState({
                 amount: '', cabinet: 'Koekelberg', category: 'Individuelle',
                 date: new Date().toISOString().split('T')[0], modality: 'Présentiel',
-                paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: ''
+                paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '',
+                notes: ''
             });
 
             React.useEffect(() => {
@@ -172,14 +173,12 @@
 
             React.useEffect(() => {
                 if (!user) return;
-
                 const sessionsCol = collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions');
                 const unsubSessions = onSnapshot(sessionsCol, (snap) => {
                     const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setSessions(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
                     setLoading(false);
                 });
-
                 const settingsDoc = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config');
                 const unsubSettings = onSnapshot(settingsDoc, (snap) => {
                     if (snap.exists()) {
@@ -191,14 +190,12 @@
                         if (d.isDarkMode !== undefined) setIsDarkMode(d.isDarkMode);
                     }
                 });
-
                 return () => { unsubSessions(); unsubSettings(); };
             }, [user]);
 
             const updateSettings = async (newData) => {
                 if (!user) return;
-                const settingsDoc = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config');
-                await setDoc(settingsDoc, newData, { merge: true });
+                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), newData, { merge: true });
             };
 
             const stats = React.useMemo(() => {
@@ -264,7 +261,7 @@
                     await addDoc(sCol, { ...data, createdAt: new Date().toISOString() });
                     setActiveTab('history');
                 }
-                setFormData({ ...formData, amount: '', clientName: '', isCancellation: false });
+                setFormData({ ...formData, amount: '', clientName: '', isCancellation: false, notes: '' });
             };
 
             const removeSession = async () => {
@@ -274,8 +271,8 @@
             };
 
             const handleExport = () => {
-                const headers = ["Date", "Cabinet", "Client", "Categorie", "Statut", "Montant"];
-                const rows = sessions.map(s => [s.date, s.cabinet, s.clientName || "N/A", s.category, s.isPaid ? "Paye" : "Impaye", s.amount]);
+                const headers = ["Date", "Cabinet", "Client", "Categorie", "Statut", "Montant", "Notes"];
+                const rows = sessions.map(s => [s.date, s.cabinet, s.clientName || "N/A", s.category, s.isPaid ? "Paye" : "Impaye", s.amount, (s.notes || "").replace(/,/g, ' ')]);
                 const csv = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
                 const blob = new Blob([csv], { type: 'text/csv' });
                 const url = URL.createObjectURL(blob);
@@ -284,7 +281,7 @@
             };
 
             const startEditing = (s) => {
-                setFormData({ ...s, amount: s.amount.toString() });
+                setFormData({ ...s, amount: (s.amount || 0).toString(), notes: s.notes || '' });
                 setEditingSession(s);
                 setActiveTab('add');
             };
@@ -294,7 +291,7 @@
                     <div className="w-20 h-1 bg-slate-900 rounded-full overflow-hidden mb-6">
                         <div className="w-full h-full bg-teal-500 animate-progress origin-left"></div>
                     </div>
-                    <p className="font-black uppercase tracking-[0.3em] text-[10px]">Cloud Syncing Ak Mindstep...</p>
+                    <p className="font-black uppercase tracking-[0.3em] text-[10px]">Chargement Ak Mindstep...</p>
                 </div>
             );
 
@@ -335,8 +332,20 @@
                         <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Présentiel' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Présentiel</button>
                         <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Visio' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Visio</button>
                     </div>
-                    <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`}>{paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                    <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-600 text-white shadow-lg' : 'bg-red-600 text-white shadow-lg'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button><button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Annulation</button></div>
+                    <div className="space-y-1">
+                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Paiement</label>
+                        <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`}>
+                            {paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Notes / Observations</label>
+                        <textarea placeholder="Détails de la séance..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-medium text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500 h-24 resize-none`} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-600 text-white shadow-lg' : 'bg-red-600 text-white shadow-lg'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button>
+                        <button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Annulation</button>
+                    </div>
                     <div className="relative text-center">
                         <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-teal-600 text-2xl opacity-40">€</span>
                         <input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-10 rounded-psy bg-transparent border-2 border-slate-800 text-5xl font-black text-center outline-none focus:border-teal-500 transition-all`} />
@@ -429,9 +438,39 @@
                                     <div className="text-center py-32 space-y-6"><div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto opacity-20 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}><Icon name="Layout" size={40} /></div><p className="text-xs font-black uppercase tracking-widest opacity-40">Votre journal est vide</p><div className="flex flex-col gap-2 max-w-xs mx-auto"><button onClick={() => setActiveTab('add')} className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl transition-all ${isDarkMode ? 'bg-teal-500 text-slate-950' : 'bg-slate-900 text-white'}`}>Encoder une séance</button></div></div>
                                 ) : (
                                     sessions.map(s => (
-                                        <div key={s.id} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border flex items-center justify-between shadow-lg transition-all`}>
-                                            <div className="flex items-center gap-5"><div className={`w-14 h-14 rounded-3xl flex items-center justify-center text-teal-600 ${isDarkMode ? 'bg-teal-500/10' : 'bg-teal-50 border border-teal-100'}`}><Icon name={s.category === 'Couple' ? 'Users' : 'User'} size={24} /></div><div><p className={`text-xs font-black uppercase ${s.isCancellation ? 'text-orange-500' : ''}`}>{s.category} {s.isCancellation && '- Annulé'}</p><p className={`text-[10px] font-bold uppercase tracking-widest mt-1 ${isDarkMode ? 'opacity-30' : 'text-slate-400'}`}>{new Date(s.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})} • {s.cabinet}</p></div></div>
-                                            <div className="flex items-center gap-4"><div className="text-right"><p className="text-xl font-black tracking-tighter">{s.amount}€</p><button onClick={() => togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-600 border-teal-500/20' : 'bg-red-600 text-white border-red-600'}`}>{s.isPaid ? 'Payé' : 'À payer'}</button></div><div className="flex flex-col gap-1"><button onClick={() => startEditing(s)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800 text-slate-600 hover:text-teal-400' : 'hover:bg-slate-50 text-slate-400 hover:text-teal-600'}`}><Icon name="Edit2" size={14}/></button><button onClick={() => setDeleteId(s.id)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-500' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'}`}><Icon name="Trash2" size={14}/></button></div></div>
+                                        <div key={s.id} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border flex flex-col shadow-lg transition-all`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-5">
+                                                    <div className={`w-14 h-14 rounded-3xl flex items-center justify-center text-teal-600 ${isDarkMode ? 'bg-teal-500/10' : 'bg-teal-50 border border-teal-100'}`}><Icon name={s.category === 'Couple' ? 'Users' : 'User'} size={24} /></div>
+                                                    <div className="space-y-1">
+                                                        <p className={`text-sm font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{s.clientName || 'Patient Anonyme'}</p>
+                                                        <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                            {s.category} <span className="mx-1 opacity-50">•</span> {s.cabinet} <span className="mx-1 opacity-50">•</span> {s.paymentMethod}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right flex flex-col items-end gap-1">
+                                                    <p className={`text-xl font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{s.amount}€</p>
+                                                    <button onClick={() => togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-600 border-teal-500/20' : 'bg-red-600 text-white border-red-600'}`}>{s.isPaid ? 'Payé' : 'À payer'}</button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="mt-4 pt-4 border-t border-slate-800/20 flex flex-col gap-3">
+                                                {s.notes && (
+                                                    <div className={`${isDarkMode ? 'bg-slate-950/50' : 'bg-slate-50'} p-3 rounded-2xl`}>
+                                                        <p className={`text-[10px] italic leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{s.notes}</p>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between">
+                                                    <p className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${s.isCancellation ? 'bg-orange-500/20 text-orange-500' : (isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400')}`}>
+                                                        {new Date(s.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})} {s.isCancellation && '• ANNULÉ'}
+                                                    </p>
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => startEditing(s)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800 text-slate-600 hover:text-teal-400' : 'hover:bg-slate-50 text-slate-400 hover:text-teal-600'}`}><Icon name="Edit2" size={14}/></button>
+                                                        <button onClick={() => setDeleteId(s.id)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-500' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'}`}><Icon name="Trash2" size={14}/></button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))
                                 )}
