@@ -26,15 +26,15 @@
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
         }
-        .rounded-psy { border-radius: var(--rounded-psy); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .card-elegant { 
-            background: #0f172a;
-            border: 1px solid #1e293b;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+            backdrop-filter: blur(10px);
         }
-        .card-elegant:hover {
-            border-color: #334155;
+        .card-active {
+            border-color: #2dd4bf !important;
+            box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
         }
         input[type="number"]::-webkit-inner-spin-button, 
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -42,11 +42,7 @@
         @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         .page-transition { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #1e293b; border-radius: 2px; }
-        input[type=range]::-webkit-slider-thumb { height: 18px; width: 18px; border-radius: 50%; background: #2dd4bf; cursor: pointer; -webkit-appearance: none; margin-top: -7px; box-shadow: 0 0 10px rgba(45, 212, 191, 0.3); }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -95,21 +91,21 @@
         const Icon = ({ name, size = 20, className = "" }) => {
             const iconNode = window.lucide?.icons[name];
             return iconNode ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}
                     dangerouslySetInnerHTML={{ __html: iconNode.map(tag => `<${tag[0]} ${Object.entries(tag[1]).map(([k, v]) => `${k}="${v}"`).join(' ')}></${tag[0]}>`).join('') }}
                 />
             ) : null;
         };
 
         const StatCard = ({ title, value, subValue, iconName, colorClass, highlight, children, isDarkMode }) => (
-            <div className={`p-6 rounded-2xl border transition-all relative overflow-hidden ${highlight ? 'bg-teal-950/20 border-teal-500/30' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}`}>
+            <div className={`p-6 rounded-2xl border transition-all relative overflow-hidden ${highlight ? 'bg-teal-950/20 border-teal-500/40 shadow-[0_0_20px_rgba(45,212,191,0.05)]' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}`}>
                 <div className="flex items-center justify-between mb-4">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</span>
                     <div className={`w-9 h-9 rounded-xl ${colorClass} bg-opacity-10 flex items-center justify-center shrink-0`}>
                         <Icon name={iconName} size={16} className={colorClass.replace('bg-', 'text-')} />
                     </div>
                 </div>
-                <div className={`text-3xl font-black tracking-tight mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
+                <div className={`text-3xl font-black tracking-tighter mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{subValue}</div>
                 {children}
             </div>
@@ -142,11 +138,11 @@
             const monthKey = `${viewDate.getFullYear()}-${(viewDate.getMonth() + 1).toString().padStart(2, '0')}`;
             const yearKey = viewDate.getFullYear().toString();
 
-            // --- RECHARTS ---
+            // --- DESTRUCTURATION RECHARTS ---
             const Recharts = window.Recharts || {};
             const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = Recharts;
 
-            // --- INITIALISATION & LISTENERS ---
+            // --- INITIALISATION ---
             React.useEffect(() => {
                 const check = setInterval(() => { if (window.lucide && window.Recharts?.ResponsiveContainer) { setLibsReady(true); clearInterval(check); } }, 500);
                 const unsubAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); else signInAnonymously(auth); });
@@ -180,14 +176,14 @@
             const stats = React.useMemo(() => {
                 const selYear = viewDate.getFullYear();
                 
-                // --- MONTH DATA ---
+                // Données du mois
                 const curSessions = sessions.filter(s => s.date.startsWith(monthKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
                 const caActé = curSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const manualInami = inamiReceipts[monthKey] || 0;
                 const paidImmediate = curSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const totalWaiting = curSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
 
-                // --- YEAR DATA ---
+                // Données de l'année (CUMULÉ)
                 const yearSessions = sessions.filter(s => s.date.startsWith(yearKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
                 const yearCaActé = yearSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const yearWaiting = yearSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
@@ -196,31 +192,28 @@
                 Object.keys(inamiReceipts).forEach(k => { if(k.startsWith(yearKey)) yearInamiManual += inamiReceipts[k]; });
                 const yearPaidImmediate = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
 
-                // Bar Chart Comparison
                 const comparisonData = Array.from({ length: 12 }, (_, i) => {
-                    const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
-                    const entry = { name: monthLabel };
+                    const monthLabelShort = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
+                    const entry = { name: monthLabelShort };
                     cabinets.forEach(cab => {
                         entry[cab] = sessions.filter(s => s.date.startsWith(`${selYear}-${(i+1).toString().padStart(2,'0')}`) && s.cabinet === cab).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                     });
                     return entry;
                 });
 
-                const getPieData = (dataArray) => {
-                    return {
-                        cat: categories.map(c => ({ name: c, value: dataArray.filter(s => s.category === c).length })),
-                        mod: [{ name: 'Présentiel', value: dataArray.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: dataArray.filter(s => s.modality === 'Visio').length }],
-                        pay: [
-                            { name: 'INAMI (Acté)', value: dataArray.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
-                            { name: 'Espèces', value: dataArray.filter(s => s.paymentMethod === 'Espèces').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
-                            { name: 'Bancaire', value: dataArray.filter(s => s.paymentMethod === 'Virement bancaire').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) }
-                        ]
-                    }
-                };
+                const buildPieData = (arr) => ({
+                    cat: categories.map(c => ({ name: c, value: arr.filter(s => s.category === c).length })),
+                    mod: [{ name: 'Présentiel', value: arr.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: arr.filter(s => s.modality === 'Visio').length }],
+                    pay: [
+                        { name: 'INAMI (Acté)', value: arr.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                        { name: 'Espèces', value: arr.filter(s => s.paymentMethod === 'Espèces').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                        { name: 'Bancaire', value: arr.filter(s => s.paymentMethod === 'Virement bancaire').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) }
+                    ]
+                });
 
                 return {
-                    month: { caActé, enBanque: Math.round((paidImmediate + manualInami) * 100) / 100, enAttente: Math.round(totalWaiting * 100) / 100, manualInami, count: curSessions.length, ...getPieData(curSessions) },
-                    year: { caActé: yearCaActé, enBanque: Math.round((yearPaidImmediate + yearInamiManual) * 100) / 100, enAttente: Math.round(yearWaiting * 100) / 100, count: yearSessions.length, ...getPieData(yearSessions) },
+                    month: { caActé, enBanque: Math.round((paidImmediate + manualInami) * 100) / 100, enAttente: Math.round(totalWaiting * 100) / 100, manualInami, count: curSessions.length, ...buildPieData(curSessions) },
+                    year: { caActé: yearCaActé, enBanque: Math.round((yearPaidImmediate + yearInamiManual) * 100) / 100, enAttente: Math.round(yearWaiting * 100) / 100, count: yearSessions.length, ...buildPieData(yearSessions) },
                     comparisonData
                 };
             }, [sessions, monthKey, yearKey, inamiReceipts, categories, filterCabinet, cabinets, viewDate]);
@@ -264,23 +257,21 @@
                 setActiveTab('history');
             };
 
-            if (loading || !libsReady) return (
-                <div className="h-screen flex flex-col items-center justify-center p-10 bg-slate-950">
-                    <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mb-6"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-teal-500">AK MINDSTEP...</p>
-                </div>
-            );
+            const deleteSession = async (id) => {
+                if (window.confirm("Supprimer cette séance ?")) {
+                    await deleteDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', id));
+                }
+            };
 
-            // --- TOOLTIP STYLE ---
-            const tooltipStyle = {
-                backgroundColor: '#0f172a',
+            // --- RENDU TOOLTIP ---
+            const tooltipContentStyle = {
+                backgroundColor: '#020617',
                 border: '1px solid #334155',
                 borderRadius: '0.75rem',
                 fontSize: '11px',
-                fontWeight: '600',
+                fontWeight: '700',
                 color: '#fff',
-                padding: '12px',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)'
+                padding: '10px'
             };
 
             const renderDistributionCharts = (data) => (
@@ -288,9 +279,9 @@
                     {[
                         { t: "Répartition Services", d: data.cat, c: CHART_COLORS },
                         { t: "Lieu de Consultation", d: data.mod, c: ['#1e293b', '#2dd4bf'] },
-                        { t: "Moyens de Paiement", d: data.pay, c: ['#6366f1', '#fbbf24', '#2dd4bf'] }
+                        { t: "Volume par Paiement", d: data.pay, c: ['#6366f1', '#fbbf24', '#2dd4bf'] }
                     ].map((chart, i) => (
-                        <div key={i} className={`p-8 rounded-[2rem] border h-[420px] flex flex-col ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
+                        <div key={i} className={`p-8 rounded-[2rem] border h-[420px] flex flex-col shadow-sm ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100'}`}>
                             <h3 className="text-[10px] font-black uppercase text-slate-500 mb-8 tracking-[0.2em] text-center border-b border-slate-800/20 pb-4">{chart.t}</h3>
                             <div className="flex-1">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -298,7 +289,7 @@
                                         <Pie data={chart.d.filter(d=>d.value>0)} innerRadius={70} outerRadius={90} dataKey="value" stroke={isDarkMode ? "#020617" : "#fff"} strokeWidth={3} paddingAngle={8} label={(p) => <text x={p.cx + (p.outerRadius + 20) * Math.cos(-p.midAngle * Math.PI / 180)} y={p.cy + (p.outerRadius + 20) * Math.sin(-p.midAngle * Math.PI / 180)} fill={isDarkMode ? "#94a3b8" : "#64748b"} textAnchor={p.x > p.cx ? 'start' : 'end'} dominantBaseline="central" className="text-[10px] font-black">{p.value}</text>}>
                                             {chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}
                                         </Pie>
-                                        <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#fff' }} />
+                                        <Tooltip contentStyle={tooltipContentStyle} itemStyle={{ color: '#fff' }} />
                                         <Legend verticalAlign="bottom" wrapperStyle={{fontSize:'9px', paddingTop:'30px', fontWeight:'700', textTransform:'uppercase'}} />
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -308,43 +299,51 @@
                 </div>
             );
 
+            if (loading || !libsReady) return (
+                <div className="h-screen flex flex-col items-center justify-center p-10 bg-slate-950">
+                    <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mb-6"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-teal-500">AK MINDSTEP SYNC...</p>
+                </div>
+            );
+
             return (
-                <div className={`min-h-screen pb-32 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
+                <div className={`min-h-screen pb-32 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
                     
-                    {/* Header Desktop */}
-                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/90 border-slate-900' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
+                    {/* Header Fixed */}
+                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/90 border-slate-900' : 'bg-white/90 border-slate-200'}`}>
                         <div className="flex items-center gap-4">
-                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg shadow-teal-500/20"><Icon name="Activity" /></div>
-                            <h1 className={`font-black text-lg uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>AK MINDSTEP <span className="font-medium opacity-50 ml-1">| consult tracker</span></h1>
+                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg"><Icon name="Activity" size={18}/></div>
+                            <h1 className="font-black text-lg uppercase tracking-tight">AK MINDSTEP <span className="font-medium opacity-50 ml-1 text-xs">| consult tracker</span></h1>
                         </div>
-                        <nav className="flex items-center gap-2 h-full">
-                            {NAV_TABS.map(t => <button key={t.id} onClick={() => setActiveTab(t.id)} className={`px-8 h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === t.id ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-500 hover:text-teal-400'}`}>{t.label}</button>)}
+                        <nav className="flex items-center gap-4 h-full">
+                            {NAV_TABS.map(t => <button key={t.id} onClick={() => setActiveTab(t.id)} className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t.id ? 'bg-teal-500/10 text-teal-400' : 'text-slate-500 hover:text-white'}`}>{t.label}</button>)}
                         </nav>
-                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border-2 rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18}/></button>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white shadow-sm'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={16}/></button>
                     </header>
 
-                    <button onClick={() => setActiveTab('add')} className="fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-14 h-14 rounded-full bg-teal-500 shadow-2xl flex items-center justify-center text-slate-950 hover:scale-110 active:scale-95 transition-all"><Icon name="Plus" size={28} /></button>
+                    {/* Floating Add Button */}
+                    <button onClick={() => setActiveTab('add')} className={`fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${isDarkMode ? 'bg-teal-500' : 'bg-slate-900'}`}><Icon name="Plus" size={32} /></button>
 
                     <main className="p-4 md:p-12 max-w-7xl mx-auto space-y-12">
                         {activeTab === 'dash_month' && (
                             <div className="space-y-10 page-transition">
-                                <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
-                                    <div className="flex items-center gap-5">
-                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className={`p-3 rounded-xl border-2 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
-                                        <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{monthTitle}</h2>
-                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className={`p-3 rounded-xl border-2 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronRight" /></button>
+                                <header className="flex flex-col sm:flex-row justify-between items-center gap-6">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className={`p-3 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
+                                        <h2 className="text-3xl font-black uppercase tracking-tighter">{monthTitle}</h2>
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className={`p-3 rounded-xl border transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-teal-500' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronRight" /></button>
                                     </div>
-                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
                                         <button onClick={() => setFilterCabinet('Tous')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === 'Tous' ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>Tous</button>
                                         {cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
                                     </div>
-                                </div>
+                                </header>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <StatCard isDarkMode={isDarkMode} title="CA Acté (Volume)" value={`${stats.month.caActé.toLocaleString()} €`} subValue="Total séances encodées" iconName="Activity" colorClass="bg-slate-400" />
-                                    <StatCard isDarkMode={isDarkMode} title="Solde en Banque" value={`${stats.month.enBanque.toLocaleString()} €`} subValue="Recettes reçues" iconName="Banknote" colorClass="bg-teal-500" highlight={true}>
+                                    <StatCard isDarkMode={isDarkMode} title="CA Acté (Volume)" value={`${stats.month.caActé.toLocaleString()} €`} subValue="Total séances du mois" iconName="Activity" colorClass="bg-slate-400" />
+                                    <StatCard isDarkMode={isDarkMode} title="Solde en Banque" value={`${stats.month.enBanque.toLocaleString()} €`} subValue="Recettes confirmées" iconName="Banknote" colorClass="bg-teal-500" highlight={true}>
                                         <div className="mt-6 pt-6 border-t border-slate-800/40 text-left">
-                                            <label className="text-[9px] font-black uppercase text-teal-500 tracking-widest block mb-2">Virement Mutuelle (€) :</label>
+                                            <label className="text-[9px] font-black uppercase text-teal-500 tracking-widest block mb-2">Saisie INAMI reçu (€) :</label>
                                             <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month.manualInami || ''} onBlur={(e) => saveInamiValue(e.target.value)} />
                                         </div>
                                     </StatCard>
@@ -359,27 +358,27 @@
                             <div className="space-y-12 page-transition">
                                 <header className="flex justify-between items-center">
                                     <div className="flex items-center gap-4">
-                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()-1, 0, 1))} className={`p-3 rounded-xl border-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
-                                        <h2 className="text-3xl font-black uppercase tracking-tighter">Exercice {viewDate.getFullYear()}</h2>
-                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()+1, 0, 1))} className={`p-3 rounded-xl border-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronRight" /></button>
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()-1, 0, 1))} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
+                                        <h2 className="text-3xl font-black uppercase tracking-tighter">Bilan {viewDate.getFullYear()}</h2>
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()+1, 0, 1))} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronRight" /></button>
                                     </div>
                                 </header>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <StatCard isDarkMode={isDarkMode} title="Volume Annuel" value={`${stats.year.caActé.toLocaleString()} €`} subValue="Total cumulé sur 12 mois" iconName="BarChart" colorClass="bg-slate-400" />
-                                    <StatCard isDarkMode={isDarkMode} title="Encaissé Annuel" value={`${stats.year.enBanque.toLocaleString()} €`} subValue="Cumul des recettes réelles" iconName="Banknote" colorClass="bg-teal-500" highlight={true} />
-                                    <StatCard isDarkMode={isDarkMode} title="Total Impayés" value={`${stats.year.enAttente.toLocaleString()} €`} subValue="Dettes cumulées sur l'année" iconName="AlertCircle" colorClass="bg-orange-500" />
+                                    <StatCard isDarkMode={isDarkMode} title="Volume Annuel" value={`${stats.year.caActé.toLocaleString()} €`} subValue="Cumul sur 12 mois" iconName="BarChart" colorClass="bg-slate-400" />
+                                    <StatCard isDarkMode={isDarkMode} title="Réel Encaissé" value={`${stats.year.enBanque.toLocaleString()} €`} subValue="Bancaire + Especes + INAMI" iconName="Banknote" colorClass="bg-teal-500" highlight={true} />
+                                    <StatCard isDarkMode={isDarkMode} title="Impayés Cumulés" value={`${stats.year.enAttente.toLocaleString()} €`} subValue="Dettes de l'exercice" iconName="AlertCircle" colorClass="bg-orange-500" />
                                 </div>
 
-                                <div className={`p-8 rounded-[2.5rem] border-2 h-[500px] flex flex-col shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                                    <h3 className="text-[11px] font-black uppercase text-slate-400 mb-10 tracking-[0.25em] text-center border-b border-slate-800/20 pb-4">Évolution Mensuelle par Cabinet (€)</h3>
+                                <div className={`p-8 rounded-[2.5rem] border h-[500px] flex flex-col shadow-xl ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                    <h3 className="text-[10px] font-black uppercase text-slate-500 mb-10 tracking-[0.25em] text-center border-b border-slate-800/20 pb-4">Performance Mensuelle par Cabinet (€)</h3>
                                     <div className="flex-1">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={stats.comparisonData}>
                                                 <CartesianGrid vertical={false} stroke={isDarkMode ? '#1e293b' : '#f1f5f9'} strokeDasharray="3 3" />
                                                 <XAxis dataKey="name" axisLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
                                                 <YAxis axisLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
-                                                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#fff' }} cursor={{fill: isDarkMode ? '#1e293b' : '#f8fafc'}} />
+                                                <Tooltip contentStyle={tooltipContentStyle} itemStyle={{ color: '#fff' }} cursor={{fill: isDarkMode ? '#1e293b' : '#f8fafc'}} />
                                                 <Legend verticalAlign="top" align="right" wrapperStyle={{paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold'}} />
                                                 {cabinets.map((cab, i) => <Bar key={cab} dataKey={cab} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} barSize={20} />)}
                                             </BarChart>
@@ -387,73 +386,75 @@
                                     </div>
                                 </div>
 
-                                <h3 className="text-xl font-black uppercase tracking-tight text-center pt-8 border-t border-slate-800/40">Répartition Annuelle Globalisée</h3>
+                                <h3 className="text-sm font-black uppercase tracking-widest text-center pt-8 text-teal-500">Analyses Globalisées de l'Année</h3>
                                 {renderDistributionCharts(stats.year)}
                             </div>
                         )}
 
                         {activeTab === 'add' && (
                             <div className="max-w-xl mx-auto page-transition pt-10 pb-20">
-                                <header className="flex justify-between items-center mb-10 px-4">
-                                    <h2 className={`text-3xl font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Nouvelle Séance</h2>
+                                <header className="flex justify-between items-center mb-8 px-4">
+                                    <h2 className="text-3xl font-black uppercase tracking-tight">Encodage</h2>
                                     <button onClick={() => setActiveTab('dash_month')} className="p-2 text-slate-500 hover:text-white transition-all"><Icon name="X" size={28} /></button>
                                 </header>
-                                <form onSubmit={handleSubmit} className={`p-10 rounded-[2.5rem] border-2 space-y-10 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
-                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Patient</label><input type="text" placeholder="..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
+                                <form onSubmit={handleSubmit} className={`p-8 md:p-10 rounded-[2.5rem] border-2 space-y-8 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
+                                        <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Patient</label><input type="text" placeholder="..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-4 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>{c}</button>)}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800 text-slate-500 hover:border-slate-600'}`}>{c}</button>)}
                                     </div>
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
                                         <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Modalité & Statut</label>
                                         <div className="grid grid-cols-2 gap-4">
-                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Présentiel' ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Présentiel</button>
-                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Visio' ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Visio</button>
+                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-3 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Présentiel' ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800 text-slate-500'}`}>Présentiel</button>
+                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-3 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Visio' ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800 text-slate-500'}`}>Visio</button>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4 mt-2">
-                                            <button type="button" onClick={() => setFormData({...formData, isPaid: true})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.isPaid ? 'bg-teal-500 border-teal-500 text-slate-950' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Déjà Payé</button>
-                                            <button type="button" onClick={() => setFormData({...formData, isPaid: false})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${!formData.isPaid ? 'bg-red-500 border-red-500 text-white shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>À Encaisser</button>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button type="button" onClick={() => setFormData({...formData, isPaid: true})} className={`py-3 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.isPaid ? 'bg-teal-500/20 text-teal-400 border-teal-500/50' : 'border-slate-800 text-slate-500'}`}>Payé</button>
+                                            <button type="button" onClick={() => setFormData({...formData, isPaid: false})} className={`py-3 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${!formData.isPaid ? 'bg-red-500 border-red-500 text-white' : 'border-slate-800 text-slate-500'}`}>À Encaisser</button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none appearance-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`}>{PAYMENT_METHODS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Service</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none appearance-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`}>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Notes de la séance..." className={`w-full p-4 rounded-xl border font-medium text-sm outline-none h-24 resize-none transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-teal-500'}`}></textarea>
                                     </div>
-                                    <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Notes / Observations</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="..." className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none h-32 resize-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-teal-500'}`}></textarea></div>
-                                    <div className="relative pt-10 border-t-2 border-slate-800/40 text-center"><span className="absolute left-6 bottom-14 font-black text-teal-600 text-4xl opacity-40 italic">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-14 rounded-3xl border-2 text-6xl font-black text-center outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
-                                    <button type="submit" className="w-full py-6 rounded-2xl bg-teal-500 text-slate-950 font-black uppercase tracking-[0.4em] text-sm shadow-2xl active:scale-95 transition-all">Enregistrer</button>
+                                    <div className="relative pt-6 border-t border-slate-800/40 text-center"><span className="absolute left-6 bottom-14 font-black text-teal-600 text-5xl opacity-40 italic">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-12 rounded-[2rem] border-2 text-7xl font-black text-center outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
+                                    <button type="submit" className="w-full py-6 rounded-[1.5rem] bg-teal-500 text-slate-950 font-black uppercase tracking-[0.4em] text-sm shadow-xl active:scale-95 transition-all">Enregistrer</button>
                                 </form>
                             </div>
                         )}
 
                         {activeTab === 'history' && (
                             <div className="space-y-12 page-transition pb-24">
-                                <header className="flex justify-between items-center px-4 border-b-4 border-slate-800/40 pb-8">
-                                    <h2 className={`text-3xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Journal de {monthTitle}</h2>
-                                    <div className="px-5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-2xl text-[10px] font-black text-teal-400 uppercase tracking-widest">{stats.month.caActé.toLocaleString()} €</div>
+                                <header className="flex justify-between items-center px-4 border-b-2 border-slate-800/40 pb-6">
+                                    <h2 className="text-3xl font-black uppercase tracking-tighter">Journal de {monthTitle}</h2>
+                                    <div className="px-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-[10px] font-black text-teal-400 uppercase">{stats.month.caActé.toLocaleString()} €</div>
                                 </header>
                                 {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
                                     <div key={wName} className="space-y-8">
-                                        <div className="flex justify-between items-center px-6 border-l-8 border-teal-500 bg-slate-900/60 py-4 rounded-r-2xl"><h3 className="text-md font-black uppercase tracking-[0.2em]">{wName}</h3><p className="text-sm font-black text-teal-400">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</p></div>
+                                        <div className="flex justify-between items-center px-6 border-l-4 border-teal-500 bg-slate-900/60 py-3 rounded-r-2xl text-[11px] font-black uppercase tracking-widest text-slate-300">
+                                            {wName} <span className="text-teal-400 font-bold">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</span>
+                                        </div>
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {wSessions.map(s => (
-                                                <div key={s.id} className={`p-8 rounded-[2rem] border-2 flex flex-col gap-6 shadow-xl transition-all group ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-teal-500'}`}>
+                                                <div key={s.id} className={`p-6 rounded-[2rem] border-2 flex flex-col gap-6 shadow-xl transition-all group ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-teal-500'}`}>
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex gap-5">
-                                                            <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner group-hover:scale-110 transition-transform"><Icon name={s.modality === 'Visio' ? 'Video' : (s.paymentMethod==='INAMI'?'Building2':'User')} size={26} /></div>
-                                                            <div className="space-y-2"><p className="text-lg font-black uppercase tracking-tight text-white leading-none">{s.clientName || 'Anonyme'}</p><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
+                                                            <div className="w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner group-hover:scale-110 transition-transform">
+                                                                <Icon name={s.modality === 'Visio' ? 'Video' : (s.paymentMethod==='INAMI'?'Building2':'User')} size={24} />
+                                                            </div>
+                                                            <div className="space-y-1"><p className="text-md font-black uppercase tracking-tight leading-none">{s.clientName || 'Anonyme'}</p><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className={`text-2xl font-black mb-3 tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{parseFloat(s.amount).toLocaleString()}€</p>
-                                                            <button onClick={()=>togglePaid(s)} className={`text-[9px] font-black uppercase px-4 py-2 rounded-xl border-2 transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 'bg-red-500 text-white border-red-600 shadow-lg'}`}>{s.isPaid ? 'ENCAISSÉ' : 'À PAYER'}</button>
+                                                            <p className="text-2xl font-black mb-3 tracking-tighter">{parseFloat(s.amount).toLocaleString()}€</p>
+                                                            <button onClick={()=>togglePaid(s)} className={`text-[8px] font-black uppercase px-4 py-1.5 rounded-full border-2 transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 'bg-red-500 text-white border-red-600 shadow-lg'}`}>{s.isPaid ? 'ENCAISSÉ' : 'À PAYER'}</button>
                                                         </div>
                                                     </div>
                                                     {s.notes && <div className={`p-4 rounded-xl text-[11px] font-medium leading-relaxed italic ${isDarkMode ? 'bg-slate-950/50 text-slate-400 border-l-4 border-slate-700' : 'bg-slate-50 text-slate-500 border-l-4 border-slate-200'}`}>{s.notes}</div>}
                                                     <div className="flex justify-between items-center pt-5 border-t border-slate-800/40">
                                                         <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'long'})}</p>
-                                                        <button onClick={()=>deleteDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions', s.id))} className="text-slate-600 hover:text-red-500 p-3 rounded-2xl transition-all"><Icon name="Trash2" size={18}/></button>
+                                                        <button onClick={()=>deleteSession(s.id)} className="text-slate-600 hover:text-red-500 p-2 transition-all"><Icon name="Trash2" size={18}/></button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -465,28 +466,28 @@
 
                         {activeTab === 'settings' && (
                             <div className="max-w-xl mx-auto space-y-10 page-transition pt-10 pb-24">
-                                <h2 className={`text-3xl font-black uppercase tracking-tighter text-center ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Réglages</h2>
+                                <h2 className="text-3xl font-black uppercase tracking-tighter text-center">Réglages</h2>
                                 <div className={`p-10 rounded-[3rem] border-2 shadow-2xl space-y-12 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
                                     <div className="space-y-8">
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500 border-b-2 border-slate-800/40 pb-4">Apparence</h3>
-                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Mode Sombre</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode});}} className={`w-12 h-6 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500 border-b border-slate-800/20 pb-4">Apparence</h3>
+                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Mode Sombre</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode});}} className={`w-14 h-8 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-7':'left-1'}`} /></button></div>
                                         <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateRemoteSettings({zoomLevel})} className="w-full" /></div>
                                     </div>
                                     <div className="space-y-6">
-                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Cabinets</h3><button onClick={()=>{const n=[...cabinets, 'Nouveau']; setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
-                                        <div className="space-y-3">{cabinets.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...cabinets]; n[i]=e.target.value; setCabinets(n);}} onBlur={()=>updateRemoteSettings({cabinets})} className={`flex-1 p-4 rounded-xl border-2 text-[11px] font-black uppercase outline-none focus:border-teal-500 transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white':'bg-slate-100 border-slate-200 text-slate-900'}`} /><button onClick={()=>{const n=cabinets.filter((_,idx)=>idx!==i); setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
+                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Cabinets</h3><button onClick={()=>{const n=[...cabinets, 'Nouveau']; setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-2 text-teal-500 hover:scale-110"><Icon name="Plus" size={20}/></button></div>
+                                        <div className="space-y-3">{cabinets.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...cabinets]; n[i]=e.target.value; setCabinets(n);}} onBlur={()=>updateRemoteSettings({cabinets})} className={`flex-1 p-3.5 rounded-xl border text-[11px] font-black uppercase outline-none transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white focus:border-teal-500':'bg-slate-100 border-slate-200 text-slate-900 focus:border-teal-500'}`} /><button onClick={()=>{const n=cabinets.filter((_,idx)=>idx!==i); setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-3.5 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
                                     </div>
-                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800/40">
-                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Services</h3><button onClick={()=>{const n=[...categories, 'Nouveau']; setCategories(n); updateRemoteSettings({categories:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
-                                        <div className="space-y-3">{categories.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...categories]; n[i]=e.target.value; setCategories(n);}} onBlur={()=>updateRemoteSettings({categories})} className={`flex-1 p-4 rounded-xl border-2 text-[11px] font-black uppercase outline-none focus:border-teal-500 transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white':'bg-slate-100 border-slate-200 text-slate-900'}`} /><button onClick={()=>{const n=categories.filter((_,idx)=>idx!==i); setCategories(n); updateRemoteSettings({categories:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
+                                    <div className="space-y-6 pt-4 border-t border-slate-800/20">
+                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Services</h3><button onClick={()=>{const n=[...categories, 'Nouveau']; setCategories(n); updateRemoteSettings({categories:n});}} className="p-2 text-teal-500 hover:scale-110"><Icon name="Plus" size={20}/></button></div>
+                                        <div className="space-y-3">{categories.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...categories]; n[i]=e.target.value; setCategories(n);}} onBlur={()=>updateRemoteSettings({categories})} className={`flex-1 p-3.5 rounded-xl border text-[11px] font-black uppercase outline-none transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white focus:border-teal-500':'bg-slate-100 border-slate-200 text-slate-900 focus:border-teal-500'}`} /><button onClick={()=>{const n=categories.filter((_,idx)=>idx!==i); setCategories(n); updateRemoteSettings({categories:n});}} className="p-3.5 text-red-500 hover:bg-red-500/10 rounded-xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
                                     </div>
-                                    <p className="text-[11px] text-slate-600 text-center font-black uppercase tracking-[0.4em] pt-8">AK MINDSTEP consult tracker v9.0</p>
+                                    <p className="text-[10px] text-slate-600 text-center font-black uppercase tracking-[0.4em] pt-8">AK MINDSTEP consult tracker v9.0</p>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* Mobile Navigation */}
+                    {/* Navigation Mobile */}
                     <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-24 border-t-4 backdrop-blur-3xl flex items-center justify-around px-8 z-50 shadow-[0_-20px_50px_rgba(0,0,0,0.6)] ${isDarkMode ? 'bg-slate-950/98 border-slate-800' : 'bg-white/95 border-slate-200 shadow-slate-200'}`}>
                         {NAV_TABS.map(t => (
                             <button key={t.id} onClick={() => setActiveTab(t.id)} className={`flex flex-col items-center gap-2.5 transition-all ${activeTab === t.id ? 'text-teal-400 scale-110 font-black' : 'text-slate-600 opacity-60'}`}>
