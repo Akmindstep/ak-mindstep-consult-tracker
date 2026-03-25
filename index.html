@@ -11,7 +11,7 @@
     
     <title>Ak Mindstep | consult tracker</title>
     
-    <!-- Dépendances (Ordre critique : PropTypes est requis par Recharts) -->
+    <!-- Dépendances (Ordre critique : PropTypes requis par Recharts) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
@@ -97,7 +97,7 @@
         };
 
         const StatCard = ({ title, value, subValue, iconName, colorClass, isDarkMode, highlight, actions }) => (
-            <div className={`${isDarkMode ? (highlight ? 'bg-teal-950/20 border-teal-500/40' : 'bg-slate-900 border-slate-800 shadow-xl') : (highlight ? 'bg-teal-50 border-teal-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm')} p-5 rounded-2xl border flex flex-col gap-2 transition-all relative overflow-hidden`}>
+            <div className={`${isDarkMode ? (highlight ? 'bg-teal-950/20 border-teal-500/40' : 'bg-slate-900 border-slate-800 shadow-xl') : (highlight ? 'bg-teal-50 border-teal-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm')} p-5 rounded-2xl border flex flex-col gap-3 transition-all relative overflow-hidden`}>
                 <div className="flex items-center justify-between">
                     <span className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{title}</span>
                     <div className={`w-7 h-7 rounded-lg ${colorClass} bg-opacity-20 flex items-center justify-center shrink-0`}>
@@ -108,16 +108,6 @@
                 <div className="text-[9px] font-bold uppercase tracking-tight text-slate-500 min-h-[1.2em]">{subValue}</div>
                 {actions && <div className="mt-2 flex flex-col gap-2">{actions}</div>}
                 {highlight && <div className="absolute top-0 right-0 p-1"><div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse"></div></div>}
-            </div>
-        );
-
-        const MiniStat = ({ label, value, iconName }) => (
-            <div className="bg-slate-900/60 border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3">
-                <Icon name={iconName} size={14} className="text-teal-600" />
-                <div>
-                    <p className="text-[8px] font-black uppercase tracking-widest opacity-50"> {label}</p>
-                    <p className="text-sm font-black tracking-tight">{value}</p>
-                </div>
             </div>
         );
 
@@ -145,10 +135,13 @@
                 paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '', notes: ''
             });
 
-            // --- VARIABLES DE RENDU (Définies avant toute utilisation) ---
+            // --- VARIABLES DE RENDU ---
             const tColors = isDarkMode ? COLORS_DARK : COLORS_LIGHT;
             const titleDisplay = activeTab === 'dash_year' ? `Exercice ${viewDate.getFullYear()}` : new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(viewDate);
             const isCurrentMonth = (viewDate.getMonth() === new Date().getMonth() && viewDate.getFullYear() === new Date().getFullYear());
+
+            // --- RECHARTS DÉSTRUCTURÉS (UNE SEULE FOIS) ---
+            const { BarChart: RCBarChart, Bar: RCBar, XAxis: RCXAxis, YAxis: RCYAxis, CartesianGrid: RCCartesianGrid, Tooltip: RCTooltip, ResponsiveContainer: RCResponsiveContainer, Cell: RCCell, PieChart: RCPieChart, Pie: RCPie, Legend: RCLegend, LabelList: RCLabelList } = window.Recharts || {};
 
             // --- INITIALISATION ---
             React.useEffect(() => {
@@ -198,23 +191,27 @@
 
                 const immediatePaid = currentSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
                 
+                // INAMI du mois passé
                 const inamiPrevTotal = previousSessions.filter(s => s.paymentMethod === 'INAMI');
                 const inamiPrevEncaissé = inamiPrevTotal.filter(s => s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
                 const inamiPrevAttente = inamiPrevTotal.filter(s => !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
 
-                const inamiCurrAttente = currentSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
-                const standardCurrAttente = currentSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+                // EN ATTENTE (Ce mois uniquement)
+                const currentMonthUnpaid = currentSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
 
                 return {
                     acté: currentSessions.reduce((acc, s) => acc + parseFloat(s.amount || 0), 0),
                     tresorerie: immediatePaid + inamiPrevEncaissé,
                     inamiPrevAttente,
                     inamiPrevEncaissé,
-                    attenteMois: inamiCurrAttente + standardCurrAttente,
+                    attenteMois: currentMonthUnpaid,
                     count: currentSessions.length,
                     catData: categories.map(c => ({ name: c, value: currentSessions.filter(s => s.category === c).length })),
                     modData: [{ name: 'Présentiel', value: currentSessions.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: currentSessions.filter(s => s.modality === 'Visio').length }],
-                    payData: paymentMethods.map(p => ({ name: p, value: currentSessions.filter(s => s.paymentMethod === p).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) })),
+                    payData: paymentMethods.map(p => ({ 
+                        name: p, 
+                        value: currentSessions.filter(s => s.paymentMethod === p && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) 
+                    })),
                     comparison: Array.from({ length: 12 }, (_, i) => {
                         const entry = { name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i)) };
                         cabinets.forEach(cab => {
@@ -249,19 +246,22 @@
             }, [sessions, viewDate]);
 
             // --- ACTIONS ---
-            const handleInamiStatusChange = async (targetPaid, specificDate = null) => {
-                const dateToSearch = specificDate || viewDate;
-                const selMonth = dateToSearch.getMonth();
-                const selYear = dateToSearch.getFullYear();
-                
-                const targets = sessions.filter(s => {
+            const handleInamiToggleBatch = async (isConfirming, dateToApply = null) => {
+                const target = dateToApply || viewDate;
+                const month = target.getMonth();
+                const year = target.getFullYear();
+
+                const sessionsToUpdate = sessions.filter(s => {
                     const d = new Date(s.date);
-                    return d.getMonth() === selMonth && d.getFullYear() === selYear && s.paymentMethod === 'INAMI' && s.isPaid !== targetPaid;
+                    return d.getMonth() === month && d.getFullYear() === year && s.paymentMethod === 'INAMI' && s.isPaid !== isConfirming;
                 });
-                
-                if (targets.length === 0) return;
+
+                if (sessionsToUpdate.length === 0) return;
+
                 const batch = writeBatch(db);
-                targets.forEach(s => batch.update(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', s.id), { isPaid: targetPaid }));
+                sessionsToUpdate.forEach(s => {
+                    batch.update(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', s.id), { isPaid: isConfirming });
+                });
                 await batch.commit();
             };
 
@@ -339,15 +339,21 @@
                 <div key={s.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col gap-4 shadow-xl transition-all mb-3">
                     <div className="flex justify-between items-start">
                         <div className="flex gap-4 items-center">
-                            <div className={`w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner`}><Icon name={s.paymentMethod==='INAMI'?'Building2':'User'} size={20}/></div>
+                            <div className="w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner"><Icon name={s.paymentMethod==='INAMI'?'Building2':'User'} size={20}/></div>
                             <div><p className="text-sm font-black uppercase tracking-tight">{s.clientName || 'Patient Anonyme'}</p><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-1"><p className="text-xl font-black tracking-tighter">{s.amount}€</p><button onClick={()=>togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${s.isPaid?'bg-teal-500/10 text-teal-500 border-teal-500/20':'bg-red-600 text-white border-red-600'}`}>{s.isPaid?'Payé':'À payer'}</button></div>
+                        <div className="text-right flex flex-col items-end gap-1">
+                            <p className="text-xl font-black tracking-tighter">{s.amount}€</p>
+                            <button onClick={()=>togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border transition-colors ${s.isPaid?'bg-teal-500/10 text-teal-500 border-teal-500/20':'bg-red-600 text-white border-red-600'}`}>{s.isPaid?'Payé':'À payer'}</button>
+                        </div>
                     </div>
                     {s.notes && <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 shadow-inner"><p className="text-[10px] italic text-slate-400 leading-relaxed">{s.notes}</p></div>}
                     <div className="flex justify-between items-center pt-3 border-t border-slate-800/40">
                         <p className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${s.isCancellation?'bg-orange-500/20 text-orange-500':'bg-slate-800 text-slate-500'}`}>{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})} {s.isCancellation && '• ANNULÉ'}</p>
-                        <div className="flex gap-1"><button onClick={()=>startEditing(s)} className="p-2 text-slate-500 hover:text-teal-400 transition-colors shadow-sm"><Icon name="Edit2" size={14}/></button><button onClick={async()=>{await deleteDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions',s.id));}} className="p-2 text-slate-500 hover:text-red-500 transition-colors shadow-sm"><Icon name="Trash2" size={14}/></button></div>
+                        <div className="flex gap-1">
+                            <button onClick={()=>startEditing(s)} className="p-2 text-slate-500 hover:text-teal-400 transition-colors shadow-sm"><Icon name="Edit2" size={14}/></button>
+                            <button onClick={async()=>{await deleteDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions',s.id));}} className="p-2 text-slate-500 hover:text-red-500 transition-colors shadow-sm"><Icon name="Trash2" size={14}/></button>
+                        </div>
                     </div>
                 </div>
             );
@@ -360,16 +366,12 @@
                 </div>
             );
 
-            // --- VARIABLES RECHARTS ---
-            const { BarChart: RCBarChart, Bar: RCBar, XAxis: RCXAxis, YAxis: RCYAxis, CartesianGrid: RCCartesianGrid, Tooltip: RCTooltip, ResponsiveContainer: RCResponsiveContainer, Cell: RCCell, PieChart: RCPieChart, Pie: RCPie, Legend: RCLegend, LabelList: RCLabelList } = window.Recharts;
-
             // --- LOGIQUE BOUTON JOURNAL GLOBAL ---
-            const currentMonthInami = sessions.filter(s => {
+            const currentMonthInamiSessions = sessions.filter(s => {
                 const d = new Date(s.date);
                 return d.getMonth() === viewDate.getMonth() && d.getFullYear() === viewDate.getFullYear() && s.paymentMethod === 'INAMI';
             });
-            const anyInamiInMonth = currentMonthInami.length > 0;
-            const allInamiPaidInMonth = anyInamiInMonth && currentMonthInami.every(s => s.isPaid);
+            const allInamiPaidInMonth = currentMonthInamiSessions.length > 0 && currentMonthInamiSessions.every(s => s.isPaid);
 
             return (
                 <div className={`min-h-screen transition-all duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
@@ -393,16 +395,16 @@
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <StatCard isDarkMode={isDarkMode} title="CA Acté (Volume)" value={`${stats.acté.toLocaleString()}€`} subValue="Tout le travail encodé" iconName="Activity" colorClass="bg-slate-600" />
-                                    <StatCard isDarkMode={isDarkMode} highlight={true} title="En Banque (Trésorerie)" value={`${stats.tresorerie.toLocaleString()}€`} subValue={`M-1 Inami payé : ${stats.inamiPrevEncaissé}€`} iconName="Banknote" colorClass="bg-teal-600" 
+                                    <StatCard isDarkMode={isDarkMode} highlight={true} title="En Banque (Réel)" value={`${stats.tresorerie.toLocaleString()}€`} subValue={`Inami encaissé M-1: ${stats.inamiPrevEncaissé}€`} iconName="Banknote" colorClass="bg-teal-600" 
                                         actions={
                                             stats.inamiPrevAttente > 0 ? (
-                                                <button onClick={() => handleInamiStatusChange(true, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 bg-teal-500 text-slate-950 text-[8px] font-black rounded-lg uppercase shadow-lg animate-pulse">Encaisser INAMI M-1 ({stats.inamiPrevAttente}€)</button>
+                                                <button onClick={() => handleInamiToggleBatch(true, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 bg-teal-500 text-slate-950 text-[8px] font-black rounded-lg uppercase shadow-lg animate-pulse">Encaisser INAMI M-1 ({stats.inamiPrevAttente}€)</button>
                                             ) : (stats.inamiPrevEncaissé > 0 ? (
-                                                <button onClick={() => handleInamiStatusChange(false, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 border-2 border-teal-500/30 text-teal-500 text-[8px] font-black rounded-lg uppercase hover:bg-teal-500/10 transition-all">Annuler encaissement ({stats.inamiPrevEncaissé}€)</button>
+                                                <button onClick={() => handleInamiToggleBatch(false, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 border-2 border-teal-500/30 text-teal-500 text-[8px] font-black rounded-lg uppercase hover:bg-teal-500/10 transition-all">Annuler encaissement ({stats.inamiPrevEncaissé}€)</button>
                                             ) : null)
                                         }
                                     />
-                                    <StatCard isDarkMode={isDarkMode} title="En Attente (M)" value={`${stats.attenteMois.toLocaleString()}€`} subValue="Impayés de cette période" iconName="Clock" colorClass="bg-orange-500" />
+                                    <StatCard isDarkMode={isDarkMode} title="En Attente (Ce mois)" value={`${stats.attenteMois.toLocaleString()}€`} subValue="Impayés de cette période" iconName="Clock" colorClass="bg-orange-500" />
                                     <StatCard isDarkMode={isDarkMode} title="Tarif Moyen" value={`${stats.count > 0 ? (stats.acté / stats.count).toFixed(0) : 0}€`} subValue={`${stats.count} séances`} iconName="TrendingUp" colorClass="bg-teal-600" />
                                 </div>
 
@@ -459,13 +461,13 @@
                                     </div>
                                     
                                     <div className="flex items-center gap-2 self-end sm:self-center">
-                                        {anyInamiInMonth && (
+                                        {currentMonthInamiSessions.length > 0 && (
                                             <button 
-                                                onClick={() => handleInamiStatusUpdate(!allInamiPaidInMonth)} 
-                                                className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase border transition-all flex items-center gap-2 ${allInamiPaidInMonth ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-teal-500/10 border-teal-500/30 text-teal-500 animate-pulse'}`}
+                                                onClick={() => handleInamiToggleBatch(!allInamiPaidInMonth)} 
+                                                className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase border transition-all flex items-center gap-2 ${allInamiPaidInMonth ? 'bg-slate-800 border-slate-700 text-slate-400 shadow-sm' : 'bg-teal-500/10 border-teal-500/30 text-teal-500 animate-pulse'}`}
                                             >
                                                 <Icon name={allInamiPaidInMonth ? "RotateCcw" : "CheckCircle"} size={12} />
-                                                {allInamiPaidInMonth ? "INAMI : Tout mettre 'À payer'" : "INAMI : Tout mettre 'Payé'"}
+                                                {allInamiPaidInMonth ? "Annuler encaissement INAMI" : "Tout encaisser INAMI"}
                                             </button>
                                         )}
                                         <button onClick={() => {const h=["Date","Cabinet","Patient","Service","Statut","Montant"]; const r=sessions.map(s=>[s.date,s.cabinet,s.clientName||"N/A",s.category,s.isPaid?"Paye":"Impaye",s.amount]); const csv=[h.join(","),...r.map(e=>e.join(","))].join("\n"); const b=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="export.csv"; a.click();}} className="p-3 rounded-xl border border-slate-800 shadow-sm"><Icon name="FileSpreadsheet" size={18}/></button>
@@ -474,10 +476,7 @@
                                 
                                 {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
                                     <div key={wName} className="space-y-4">
-                                        <div className="flex items-center justify-between border-b border-teal-500/20 pb-2 px-2">
-                                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-teal-500">{wName}</h3>
-                                            <p className="text-[10px] font-black opacity-30">{wSessions.reduce((acc,s)=>acc+parseFloat(s.amount||0),0)}€</p>
-                                        </div>
+                                        <div className="flex items-center justify-between border-b border-teal-500/20 pb-2 px-2"><h3 className="text-xs font-black uppercase tracking-[0.2em] text-teal-500">{wName}</h3><p className="text-[10px] font-black opacity-30">{wSessions.reduce((acc,s)=>acc+parseFloat(s.amount||0),0)}€</p></div>
                                         <div className="space-y-3">
                                             {wSessions.map(s => renderSessionCard(s))}
                                         </div>
