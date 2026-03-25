@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <!-- Meta tags pour le mode "Application" sur téléphone -->
+    <!-- Meta tags pour le mode "Application" -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Ak Mindstep">
-    <meta name="mobile-web-app-capable" content="yes">
     
     <title>Ak Mindstep | consult tracker</title>
     
-    <!-- Dépendances stables -->
+    <!-- Dépendances (Ordre critique : PropTypes est requis par Recharts) -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
@@ -23,23 +22,22 @@
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        :root { --rounded-psy: 2.5rem; }
+        :root { --rounded-psy: 2rem; }
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
-            -webkit-tap-highlight-color: transparent; 
-            overscroll-behavior-y: contain;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #020617; /* Slate-950 */
         }
         .rounded-psy { border-radius: var(--rounded-psy); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .animate-progress { animation: progress 2s ease-in-out infinite; }
         @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .page-transition { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .page-transition { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 overflow-x-hidden transition-colors duration-300">
+<body class="text-slate-100 overflow-x-hidden transition-colors duration-300">
     <div id="root"></div>
 
     <script type="importmap">
@@ -55,7 +53,7 @@
     <script type="text/babel" data-type="module">
         import { initializeApp } from "firebase/app";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-        import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+        import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from "firebase/firestore";
 
         // --- CONFIGURATION FIREBASE ---
         const firebaseConfig = {
@@ -67,11 +65,12 @@
             appId: "1:1076236018116:web:9fdfdddede40fea2528491"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        const firebaseApp = initializeApp(firebaseConfig);
+        const auth = getAuth(firebaseApp);
+        const db = getFirestore(firebaseApp);
         const appIdGlobal = 'ak-mindstep-prod';
 
+        // --- CONSTANTES ---
         const NAV_TABS = [
             { id: 'dash_month', label: 'Mensuel', icon: 'Calendar' },
             { id: 'dash_year', label: 'Annuel', icon: 'BarChart3' },
@@ -82,12 +81,9 @@
         const COLORS_LIGHT = ['#0f172a', '#0d9488', '#334155', '#0891b2', '#d97706', '#4f46e5', '#10b981'];
         const COLORS_DARK = ['#94a3b8', '#2dd4bf', '#cbd5e1', '#22d3ee', '#fbbf24', '#818cf8', '#34d399'];
 
-        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } = window.Recharts;
-
-        // --- COMPOSANTS UI ---
+        // --- COMPOSANTS UI STATIQUES ---
         const Icon = ({ name, size = 20, className = "" }) => {
-            if (!window.lucide) return null;
-            const iconNode = window.lucide.icons[name];
+            const iconNode = window.lucide?.icons[name];
             if (!iconNode) return null;
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}
@@ -100,44 +96,33 @@
             );
         };
 
-        const StatCard = ({ title, value, subValue, iconName, colorClass, isDarkMode }) => (
-            <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700 shadow-lg' : 'bg-white border-slate-200 shadow-sm'} p-6 rounded-2xl border flex flex-col gap-3 transition-all`}>
+        const StatCard = ({ title, value, subValue, iconName, colorClass, isDarkMode, highlight, actions }) => (
+            <div className={`${isDarkMode ? (highlight ? 'bg-teal-950/20 border-teal-500/40' : 'bg-slate-900 border-slate-800 shadow-xl') : (highlight ? 'bg-teal-50 border-teal-200 shadow-sm' : 'bg-white border-slate-200 shadow-sm')} p-5 rounded-2xl border flex flex-col gap-2 transition-all relative overflow-hidden`}>
                 <div className="flex items-center justify-between">
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{title}</span>
-                    <div className={`w-8 h-8 rounded-lg ${colorClass} ${isDarkMode ? 'bg-opacity-20' : 'bg-opacity-10'} flex items-center justify-center shrink-0`}>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{title}</span>
+                    <div className={`w-7 h-7 rounded-lg ${colorClass} bg-opacity-20 flex items-center justify-center shrink-0`}>
                         <Icon name={iconName} size={14} className={isDarkMode ? 'text-white' : colorClass.replace('bg-', 'text-')} />
                     </div>
                 </div>
-                <div className={`text-2xl font-black tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
-                {subValue && <div className={`text-[9px] font-bold uppercase tracking-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>{subValue}</div>}
+                <div className={`text-2xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
+                <div className="text-[9px] font-bold uppercase tracking-tight text-slate-500 min-h-[1.2em]">{subValue}</div>
+                {actions && <div className="mt-2 flex flex-col gap-2">{actions}</div>}
+                {highlight && <div className="absolute top-0 right-0 p-1"><div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse"></div></div>}
             </div>
         );
 
-        const MiniStat = ({ label, value, iconName, isDarkMode }) => (
-            <div className={`${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} px-4 py-3 rounded-2xl border flex items-center gap-3`}>
+        const MiniStat = ({ label, value, iconName }) => (
+            <div className="bg-slate-900/60 border border-slate-800 px-4 py-3 rounded-2xl flex items-center gap-3">
                 <Icon name={iconName} size={14} className="text-teal-600" />
                 <div>
-                    <p className={`text-[8px] font-black uppercase tracking-widest ${isDarkMode ? 'opacity-50' : 'text-slate-500'}`}>{label}</p>
-                    <p className={`text-sm font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</p>
+                    <p className="text-[8px] font-black uppercase tracking-widest opacity-50"> {label}</p>
+                    <p className="text-sm font-black tracking-tight">{value}</p>
                 </div>
             </div>
         );
 
-        const renderPieLabel = (props, isDarkMode) => {
-            const { cx, cy, midAngle, innerRadius, outerRadius, value, name } = props;
-            if (!value) return null;
-            const RADIAN = Math.PI / 180;
-            const radius = outerRadius + 20;
-            const x = cx + radius * Math.cos(-midAngle * RADIAN);
-            const y = cy + radius * Math.sin(-midAngle * RADIAN);
-            return (
-                <text x={x} y={y} fill={isDarkMode ? "#94a3b8" : "#475569"} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[9px] font-bold">
-                    {`${name}: ${value}`}
-                </text>
-            );
-        };
-
         function App() {
+            // --- ÉTATS ---
             const [user, setUser] = React.useState(null);
             const [libsReady, setLibsReady] = React.useState(false);
             const [isDarkMode, setIsDarkMode] = React.useState(true);
@@ -151,134 +136,159 @@
             const [categories, setCategories] = React.useState(['Individuelle', 'Couple', 'Familiale']);
             const [paymentMethods, setPaymentMethods] = React.useState(['Virement bancaire', 'Espèces', 'INAMI']);
             const [zoomLevel, setZoomLevel] = React.useState(100);
-
+            
             const [deleteId, setDeleteId] = React.useState(null);
             const [editingSession, setEditingSession] = React.useState(null);
-
             const [formData, setFormData] = React.useState({
                 amount: '', cabinet: 'Koekelberg', category: 'Individuelle',
                 date: new Date().toISOString().split('T')[0], modality: 'Présentiel',
-                paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '',
-                notes: ''
+                paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '', notes: ''
             });
 
+            // --- VARIABLES DE RENDU (Définies avant toute utilisation) ---
+            const tColors = isDarkMode ? COLORS_DARK : COLORS_LIGHT;
+            const titleDisplay = activeTab === 'dash_year' ? `Exercice ${viewDate.getFullYear()}` : new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(viewDate);
+            const isCurrentMonth = (viewDate.getMonth() === new Date().getMonth() && viewDate.getFullYear() === new Date().getFullYear());
+
+            // --- INITIALISATION ---
             React.useEffect(() => {
-                signInAnonymously(auth).catch(e => console.error("Auth error", e));
-                const unsubscribe = onAuthStateChanged(auth, setUser);
-                const checkLibs = setInterval(() => {
-                    if (window.Recharts && window.lucide) { setLibsReady(true); clearInterval(checkLibs); }
+                const check = setInterval(() => { 
+                    if (window.lucide && window.Recharts && window.Recharts.ResponsiveContainer) { 
+                        setLibsReady(true); 
+                        clearInterval(check); 
+                    } 
                 }, 500);
-                return () => { unsubscribe(); clearInterval(checkLibs); };
+                const unsubAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); else signInAnonymously(auth); });
+                return () => { clearInterval(check); unsubAuth(); };
             }, []);
 
             React.useEffect(() => {
                 if (!user) return;
-                const sessionsCol = collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions');
-                const unsubSessions = onSnapshot(sessionsCol, (snap) => {
-                    const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setSessions(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
+                const unsubSessions = onSnapshot(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions'), (snap) => {
+                    setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     setLoading(false);
                 });
-                const settingsDoc = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config');
-                const unsubSettings = onSnapshot(settingsDoc, (snap) => {
+                const unsubSettings = onSnapshot(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), (snap) => {
                     if (snap.exists()) {
                         const d = snap.data();
                         if (d.cabinets) setCabinets(d.cabinets);
                         if (d.categories) setCategories(d.categories);
                         if (d.paymentMethods) setPaymentMethods(d.paymentMethods);
-                        if (d.zoomLevel) setZoomLevel(d.zoomLevel);
                         if (d.isDarkMode !== undefined) setIsDarkMode(d.isDarkMode);
+                        if (d.zoomLevel) setZoomLevel(d.zoomLevel);
                     }
                 });
                 return () => { unsubSessions(); unsubSettings(); };
             }, [user]);
 
-            const updateSettings = async (newData) => {
-                if (!user) return;
-                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), newData, { merge: true });
-            };
-
+            // --- CALCULS STATISTIQUES ---
             const stats = React.useMemo(() => {
                 const selYear = viewDate.getFullYear();
                 const selMonth = viewDate.getMonth();
-                const getPeriodData = (isYearly) => {
-                    const filtered = sessions.filter(s => {
-                        const d = new Date(s.date);
-                        const matchDate = isYearly ? d.getFullYear() === selYear : (d.getMonth() === selMonth && d.getFullYear() === selYear);
-                        const matchCabinet = filterCabinet === 'Tous' || s.cabinet === filterCabinet;
-                        return matchDate && matchCabinet;
-                    });
-                    const encaisse = filtered.filter(s => s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
-                    const attendu = filtered.filter(s => !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
-                    const presCount = filtered.filter(s => s.modality === 'Présentiel').length;
-                    const visioCount = filtered.filter(s => s.modality === 'Visio').length;
-                    return { 
-                        encaisse, attendu, total: encaisse + attendu, count: filtered.length, presCount, visioCount,
-                        catData: categories.map(c => ({ name: c, value: filtered.filter(s => s.category === c).length })),
-                        modData: [{ name: 'Présentiel', value: presCount }, { name: 'Visio', value: visioCount }],
-                        payData: paymentMethods.map(p => ({ 
-                            name: p, 
-                            value: filtered.filter(s => s.paymentMethod === p && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) 
-                        })),
-                        items: filtered 
-                    };
-                };
-                const comparison = Array.from({ length: 12 }, (_, i) => {
-                    const entry = { name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i)) };
-                    cabinets.forEach(cab => {
-                        entry[cab] = sessions.filter(s => {
-                            const d = new Date(s.date);
-                            return d.getMonth() === i && d.getFullYear() === selYear && s.cabinet === cab;
-                        }).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
-                    });
-                    return entry;
+                const prevMonthDate = new Date(selYear, selMonth - 1, 1);
+                
+                const getPeriodSessions = (month, year) => sessions.filter(s => {
+                    const d = new Date(s.date);
+                    const matchCab = filterCabinet === 'Tous' || s.cabinet === filterCabinet;
+                    return d.getMonth() === month && d.getFullYear() === year && matchCab;
                 });
-                return { month: getPeriodData(false), year: getPeriodData(true), comparison };
-            }, [sessions, viewDate, filterCabinet, cabinets, categories, paymentMethods]);
 
-            const handleNav = (dir) => {
-                if (activeTab === 'dash_month') setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + dir, 1));
-                else setViewDate(new Date(viewDate.getFullYear() + dir, viewDate.getMonth(), 1));
+                const currentSessions = getPeriodSessions(selMonth, selYear);
+                const previousSessions = getPeriodSessions(prevMonthDate.getMonth(), prevMonthDate.getFullYear());
+
+                const immediatePaid = currentSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+                
+                const inamiPrevTotal = previousSessions.filter(s => s.paymentMethod === 'INAMI');
+                const inamiPrevEncaissé = inamiPrevTotal.filter(s => s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+                const inamiPrevAttente = inamiPrevTotal.filter(s => !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+
+                const inamiCurrAttente = currentSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+                const standardCurrAttente = currentSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+
+                return {
+                    acté: currentSessions.reduce((acc, s) => acc + parseFloat(s.amount || 0), 0),
+                    tresorerie: immediatePaid + inamiPrevEncaissé,
+                    inamiPrevAttente,
+                    inamiPrevEncaissé,
+                    attenteMois: inamiCurrAttente + standardCurrAttente,
+                    count: currentSessions.length,
+                    catData: categories.map(c => ({ name: c, value: currentSessions.filter(s => s.category === c).length })),
+                    modData: [{ name: 'Présentiel', value: currentSessions.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: currentSessions.filter(s => s.modality === 'Visio').length }],
+                    payData: paymentMethods.map(p => ({ name: p, value: currentSessions.filter(s => s.paymentMethod === p).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0) })),
+                    comparison: Array.from({ length: 12 }, (_, i) => {
+                        const entry = { name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i)) };
+                        cabinets.forEach(cab => {
+                            entry[cab] = sessions.filter(s => {
+                                const d = new Date(s.date);
+                                return d.getMonth() === i && d.getFullYear() === selYear && s.cabinet === cab;
+                            }).reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+                        });
+                        return entry;
+                    })
+                };
+            }, [sessions, viewDate, filterCabinet, categories, paymentMethods, cabinets]);
+
+            const groupedWeeks = React.useMemo(() => {
+                const selMonth = viewDate.getMonth();
+                const selYear = viewDate.getFullYear();
+                const filtered = sessions.filter(s => {
+                    const d = new Date(s.date);
+                    return d.getMonth() === selMonth && d.getFullYear() === selYear;
+                }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                const res = { "Semaine 1": [], "Semaine 2": [], "Semaine 3": [], "Semaine 4": [], "Semaine 5": [] };
+                filtered.forEach(s => {
+                    const day = new Date(s.date).getDate();
+                    if (day <= 7) res["Semaine 1"].push(s);
+                    else if (day <= 14) res["Semaine 2"].push(s);
+                    else if (day <= 21) res["Semaine 3"].push(s);
+                    else if (day <= 28) res["Semaine 4"].push(s);
+                    else res["Semaine 5"].push(s);
+                });
+                return res;
+            }, [sessions, viewDate]);
+
+            // --- ACTIONS ---
+            const handleInamiStatusChange = async (targetPaid, specificDate = null) => {
+                const dateToSearch = specificDate || viewDate;
+                const selMonth = dateToSearch.getMonth();
+                const selYear = dateToSearch.getFullYear();
+                
+                const targets = sessions.filter(s => {
+                    const d = new Date(s.date);
+                    return d.getMonth() === selMonth && d.getFullYear() === selYear && s.paymentMethod === 'INAMI' && s.isPaid !== targetPaid;
+                });
+                
+                if (targets.length === 0) return;
+                const batch = writeBatch(db);
+                targets.forEach(s => batch.update(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', s.id), { isPaid: targetPaid }));
+                await batch.commit();
             };
-
-            const resetToToday = () => setViewDate(new Date());
 
             const togglePaid = async (s) => {
-                const sRef = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', s.id);
-                await updateDoc(sRef, { isPaid: !s.isPaid });
+                await updateDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', s.id), { isPaid: !s.isPaid });
             };
 
-            const saveSession = async (e) => {
+            const handleSave = async (e) => {
                 e.preventDefault();
                 if (!user) return;
                 const data = { ...formData, amount: parseFloat(formData.amount) };
                 if (editingSession) {
-                    const sRef = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', editingSession.id);
-                    await updateDoc(sRef, data);
+                    await updateDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', editingSession.id), data);
                     setEditingSession(null);
                 } else {
-                    const sCol = collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions');
-                    await addDoc(sCol, { ...data, createdAt: new Date().toISOString() });
+                    await addDoc(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions'), { ...data, createdAt: new Date().toISOString() });
                     setActiveTab('history');
                 }
-                setFormData({ ...formData, amount: '', clientName: '', isCancellation: false, notes: '' });
+                setFormData({ ...formData, amount: '', clientName: '', notes: '', isCancellation: false });
             };
 
-            const removeSession = async () => {
-                const sRef = doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', deleteId);
-                await deleteDoc(sRef);
-                setDeleteId(null);
+            const handleNav = (d) => {
+                if (activeTab === 'dash_year') setViewDate(new Date(viewDate.getFullYear() + d, viewDate.getMonth(), 1));
+                else setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + d, 1));
             };
 
-            const handleExport = () => {
-                const headers = ["Date", "Cabinet", "Client", "Categorie", "Statut", "Montant", "Notes"];
-                const rows = sessions.map(s => [s.date, s.cabinet, s.clientName || "N/A", s.category, s.isPaid ? "Paye" : "Impaye", s.amount, (s.notes || "").replace(/,/g, ' ')]);
-                const csv = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-                const blob = new Blob([csv], { type: 'text/csv' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url; a.download = "ak_mindstep_export.csv"; a.click();
-            };
+            const resetToToday = () => setViewDate(new Date());
 
             const startEditing = (s) => {
                 setFormData({ ...s, amount: (s.amount || 0).toString(), notes: s.notes || '' });
@@ -286,216 +296,213 @@
                 setActiveTab('add');
             };
 
-            if (loading || !libsReady) return (
-                <div className="h-screen flex flex-col items-center justify-center bg-slate-950 text-teal-500 p-10 text-center">
-                    <div className="w-20 h-1 bg-slate-900 rounded-full overflow-hidden mb-6">
-                        <div className="w-full h-full bg-teal-500 animate-progress origin-left"></div>
+            const updateRemoteSettings = async (n) => {
+                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), n, { merge: true });
+            };
+
+            // --- RENDU HELPERS ---
+            const renderPieLabelLocal = (p) => {
+                if (!p.value) return null;
+                const RADIAN = Math.PI / 180;
+                const radius = p.outerRadius + 15;
+                const x = p.cx + radius * Math.cos(-p.midAngle * RADIAN);
+                const y = p.cy + radius * Math.sin(-p.midAngle * RADIAN);
+                return <text x={x} y={y} fill="#94a3b8" textAnchor={x > p.cx ? 'start' : 'end'} dominantBaseline="central" className="text-[9px] font-bold">{p.name}: {p.value}</text>;
+            };
+
+            const renderForm = (h, l) => {
+                const getBtnClass = (active) => {
+                    const base = "py-4 rounded-3xl text-center font-black uppercase border-2 transition-all ";
+                    if (active) return base + "bg-teal-500 border-teal-500 text-slate-950 shadow-lg";
+                    return base + (isDarkMode ? "border-slate-800 text-slate-500" : "border-slate-200 text-slate-400");
+                };
+
+                return (
+                    <form onSubmit={h} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-2xl' : 'bg-white border-slate-200 shadow-xl'} p-8 rounded-psy border space-y-6`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent border-slate-800 text-white focus:border-teal-500" /></div>
+                            <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Patient</label><input type="text" placeholder="Nom..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent border-slate-800 text-white focus:border-teal-500" /></div>
+                        </div>
+                        <div className="space-y-2"><label className="text-[9px] font-black uppercase opacity-40">Cabinet</label><div className="grid grid-cols-2 gap-2">{cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={getBtnClass(formData.cabinet === c) + " text-[10px]"}>{c}</button>)}</div></div>
+                        <div className="space-y-2"><label className="text-[9px] font-black uppercase opacity-40">Service</label><div className="grid grid-cols-3 gap-2">{categories.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, category: c})} className={getBtnClass(formData.category === c) + " text-[8px]"}>{c}</button>)}</div></div>
+                        <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Présentiel' ? 'bg-white text-slate-950' : 'border-slate-800 text-slate-600'}`}>Présentiel</button><button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Visio' ? 'bg-white text-slate-950' : 'border-slate-800 text-slate-600'}`}>Visio</button></div>
+                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent border-slate-800 text-white focus:border-teal-500">{paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Notes</label><textarea placeholder="..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className="w-full p-4 rounded-2xl border-2 font-medium text-xs outline-none bg-transparent border-slate-800 text-white h-24 resize-none focus:border-teal-500" /></div>
+                        <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button><button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white' : 'border-slate-800 text-slate-500'}`}>Annulation</button></div>
+                        <div className="relative text-center"><span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-teal-600 text-2xl opacity-40">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full py-10 rounded-psy bg-transparent border-2 border-slate-800 text-5xl font-black text-center outline-none focus:border-teal-500" /></div>
+                        <button type="submit" className="w-full py-6 rounded-psy bg-teal-500 text-slate-950 font-black uppercase tracking-[0.2em] shadow-xl">{l}</button>
+                    </form>
+                );
+            };
+
+            const renderSessionCard = (s) => (
+                <div key={s.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col gap-4 shadow-xl transition-all mb-3">
+                    <div className="flex justify-between items-start">
+                        <div className="flex gap-4 items-center">
+                            <div className={`w-12 h-12 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner`}><Icon name={s.paymentMethod==='INAMI'?'Building2':'User'} size={20}/></div>
+                            <div><p className="text-sm font-black uppercase tracking-tight">{s.clientName || 'Patient Anonyme'}</p><p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-1"><p className="text-xl font-black tracking-tighter">{s.amount}€</p><button onClick={()=>togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${s.isPaid?'bg-teal-500/10 text-teal-500 border-teal-500/20':'bg-red-600 text-white border-red-600'}`}>{s.isPaid?'Payé':'À payer'}</button></div>
                     </div>
-                    <p className="font-black uppercase tracking-[0.3em] text-[10px]">Chargement Ak Mindstep...</p>
+                    {s.notes && <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50 shadow-inner"><p className="text-[10px] italic text-slate-400 leading-relaxed">{s.notes}</p></div>}
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-800/40">
+                        <p className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${s.isCancellation?'bg-orange-500/20 text-orange-500':'bg-slate-800 text-slate-500'}`}>{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})} {s.isCancellation && '• ANNULÉ'}</p>
+                        <div className="flex gap-1"><button onClick={()=>startEditing(s)} className="p-2 text-slate-500 hover:text-teal-400 transition-colors shadow-sm"><Icon name="Edit2" size={14}/></button><button onClick={async()=>{await deleteDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions',s.id));}} className="p-2 text-slate-500 hover:text-red-500 transition-colors shadow-sm"><Icon name="Trash2" size={14}/></button></div>
+                    </div>
                 </div>
             );
 
-            const currentData = activeTab === 'dash_month' ? stats.month : stats.year;
-            const titleString = activeTab === 'dash_month' ? new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(viewDate) : `Exercice ${viewDate.getFullYear()}`;
-            const isCurrent = activeTab === 'dash_month' 
-                ? (viewDate.getMonth() === new Date().getMonth() && viewDate.getFullYear() === new Date().getFullYear())
-                : (viewDate.getFullYear() === new Date().getFullYear());
-            const tColors = isDarkMode ? COLORS_DARK : COLORS_LIGHT;
-
-            const renderForm = (h, l) => (
-                <form onSubmit={h} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-2xl' : 'bg-white border-slate-200 shadow-xl'} p-8 rounded-psy border space-y-6`}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`} /></div>
-                        <div className="space-y-1"><label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Patient</label><input type="text" placeholder="Nom..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`} /></div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Cabinet</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {cabinets.map(c => (
-                                <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${formData.cabinet === c ? (isDarkMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-slate-900 border-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>
-                                    {c}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Service</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {categories.map(c => (
-                                <button key={c} type="button" onClick={() => setFormData({...formData, category: c})} className={`py-4 rounded-3xl text-[8px] font-black uppercase border-2 transition-all ${formData.category === c ? (isDarkMode ? 'bg-teal-500 border-teal-500 text-white shadow-lg' : 'bg-slate-900 border-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>
-                                    {c}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Présentiel' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Présentiel</button>
-                        <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-4 rounded-2xl text-[9px] font-black border transition-all ${formData.modality === 'Visio' ? (isDarkMode ? 'bg-white text-slate-950' : 'bg-slate-900 text-white shadow-lg') : (isDarkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400')}`}>Visio</button>
-                    </div>
-                    <div className="space-y-1">
-                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Paiement</label>
-                        <select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-black text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500`}>
-                            {paymentMethods.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
-                    </div>
-                    <div className="space-y-1">
-                        <label className={`text-[9px] font-black uppercase ${isDarkMode ? 'opacity-40' : 'text-slate-600'}`}>Notes / Observations</label>
-                        <textarea placeholder="Détails de la séance..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} className={`w-full p-4 rounded-2xl border-2 font-medium text-xs outline-none bg-transparent ${isDarkMode ? 'border-slate-800 text-white' : 'border-slate-200 text-slate-900'} focus:border-teal-500 h-24 resize-none`} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => setFormData({...formData, isPaid: !formData.isPaid})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isPaid ? 'bg-teal-600 text-white shadow-lg' : 'bg-red-600 text-white shadow-lg'}`}>{formData.isPaid ? 'Payé' : 'À payer'}</button>
-                        <button type="button" onClick={() => setFormData({...formData, isCancellation: !formData.isCancellation})} className={`py-4 rounded-2xl text-[10px] font-black border transition-all ${formData.isCancellation ? 'bg-orange-500 text-white shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Annulation</button>
-                    </div>
-                    <div className="relative text-center">
-                        <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-teal-600 text-2xl opacity-40">€</span>
-                        <input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-10 rounded-psy bg-transparent border-2 border-slate-800 text-5xl font-black text-center outline-none focus:border-teal-500 transition-all`} />
-                    </div>
-                    <button type="submit" className={`w-full py-6 rounded-psy ${isDarkMode ? 'bg-teal-500 text-slate-950' : 'bg-slate-900 text-white'} font-black uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all`}>{l}</button>
-                </form>
+            // --- ÉCRAN CHARGEMENT ---
+            if (loading || !libsReady) return (
+                <div className="h-screen flex flex-col items-center justify-center bg-slate-950 p-10 text-center">
+                    <div className="w-16 h-1 bg-slate-900 rounded-full overflow-hidden mb-4"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-teal-500">Chargement Ak Mindstep...</p>
+                </div>
             );
+
+            // --- VARIABLES RECHARTS ---
+            const { BarChart: RCBarChart, Bar: RCBar, XAxis: RCXAxis, YAxis: RCYAxis, CartesianGrid: RCCartesianGrid, Tooltip: RCTooltip, ResponsiveContainer: RCResponsiveContainer, Cell: RCCell, PieChart: RCPieChart, Pie: RCPie, Legend: RCLegend, LabelList: RCLabelList } = window.Recharts;
+
+            // --- LOGIQUE BOUTON JOURNAL GLOBAL ---
+            const currentMonthInami = sessions.filter(s => {
+                const d = new Date(s.date);
+                return d.getMonth() === viewDate.getMonth() && d.getFullYear() === viewDate.getFullYear() && s.paymentMethod === 'INAMI';
+            });
+            const anyInamiInMonth = currentMonthInami.length > 0;
+            const allInamiPaidInMonth = anyInamiInMonth && currentMonthInami.every(s => s.isPaid);
 
             return (
                 <div className={`min-h-screen transition-all duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
-                    
-                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b transition-colors ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200 shadow-sm'} backdrop-blur-xl`}>
-                        <div className="flex items-center gap-3"><div className={`w-10 h-10 bg-teal-500 rounded-2xl flex items-center justify-center ${isDarkMode ? 'text-slate-950' : 'text-white'} shadow-lg shadow-teal-500/20`}><Icon name="Activity" /></div><div><h1 className={`text-xl font-black uppercase tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Ak Mindstep</h1><p className="text-[7px] font-black text-teal-600 uppercase tracking-widest mt-1">consult tracker</p></div></div>
-                        <nav className="flex gap-1 h-full">{NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingSession(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === t.id ? 'text-teal-600' : (isDarkMode ? 'text-slate-500' : 'text-slate-400')}`}>{t.label}{activeTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-teal-500 rounded-t-full"/>}</button>)}</nav>
-                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className={`p-3 rounded-xl border ${isDarkMode ? 'border-slate-800 hover:bg-slate-900' : 'border-slate-200 hover:bg-slate-100'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18} /></button>
+                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200 shadow-sm'} backdrop-blur-xl`}>
+                        <div className="flex items-center gap-3"><div className="w-10 h-10 bg-teal-500 rounded-2xl flex items-center justify-center text-slate-950 shadow-lg shadow-teal-500/20"><Icon name="Activity" /></div><div><h1 className="text-sm font-black uppercase tracking-tighter leading-none">Ak Mindstep</h1><p className="text-[7px] font-bold text-teal-600 uppercase tracking-widest mt-1">consult tracker</p></div></div>
+                        <nav className="flex h-full">{NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingSession(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === t.id ? 'text-teal-600' : (isDarkMode ? 'text-slate-500' : 'text-slate-400')}`}>{t.label}{activeTab === t.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-teal-500 rounded-t-full"/>}</button>)}</nav>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); }} className="p-2.5 rounded-xl border border-slate-800 shadow-sm"><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18} /></button>
                     </header>
 
-                    <div className={`fixed z-[60] flex items-center group transition-all duration-300 md:bottom-8 md:right-8 bottom-28 right-6 ${activeTab === 'add' || editingSession ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}>
-                        <button onClick={() => setActiveTab('add')} className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 ${isDarkMode ? 'bg-teal-500 hover:bg-teal-400' : 'bg-slate-900 hover:bg-black'} group-hover:scale-110`}>
-                            <Icon name="Plus" size={32} className={isDarkMode ? 'text-slate-950' : 'text-white'} />
-                        </button>
+                    <div className={`fixed z-[60] bottom-28 right-6 md:bottom-8 md:right-8 transition-all ${activeTab === 'add' || editingSession ? 'scale-0' : 'scale-100'}`}>
+                        <button onClick={() => setActiveTab('add')} className="w-16 h-16 rounded-full bg-teal-500 shadow-2xl flex items-center justify-center"><Icon name="Plus" size={32} className="text-slate-950" /></button>
                     </div>
 
                     <main className="p-4 md:p-10 max-w-6xl mx-auto pb-48">
                         {(activeTab === 'dash_month' || activeTab === 'dash_year') && (
                             <div className="space-y-6 page-transition px-2">
                                 <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div className="flex items-center gap-3"><button onClick={() => handleNav(-1)} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronLeft" size={24}/></button><h2 className="text-3xl font-black uppercase tracking-tighter">{titleString}</h2><button onClick={() => handleNav(1)} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronRight" size={24}/></button>{!isCurrent && <button onClick={resetToToday} className="ml-2 p-2 bg-teal-500/10 text-teal-600 rounded-lg"><Icon name="RotateCcw" size={14}/></button>}</div>
-                                    <div className={`flex items-center gap-1 p-1 rounded-xl max-w-full overflow-x-auto no-scrollbar ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200 shadow-inner'}`}><button onClick={() => setFilterCabinet('Tous')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === 'Tous' ? 'bg-teal-600 text-white shadow-lg' : (isDarkMode ? 'text-slate-500' : 'text-slate-500')}`}>Tous</button>{cabinets.map(cab => <button key={cab} onClick={() => setFilterCabinet(cab)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase whitespace-nowrap ${filterCabinet === cab ? 'bg-teal-600 text-white shadow-lg' : (isDarkMode ? 'text-slate-500' : 'text-slate-500')}`}>{cab}</button>)}</div>
+                                    <div className="flex items-center gap-3"><button onClick={() => handleNav(-1)} className="p-2 rounded-xl border border-slate-800 shadow-sm"><Icon name="ChevronLeft" /></button><h2 className="text-2xl font-black uppercase tracking-tighter">{titleDisplay}</h2><button onClick={() => handleNav(1)} className="p-2 rounded-xl border border-slate-800 shadow-sm"><Icon name="ChevronRight" /></button>{!isCurrentMonth && <button onClick={resetToToday} className="ml-2 p-2 bg-teal-500/10 text-teal-600 rounded-lg"><Icon name="RotateCcw" size={14}/></button>}</div>
+                                    <div className={`flex gap-1 p-1 rounded-xl bg-slate-900 border border-slate-800 overflow-x-auto no-scrollbar`}><button onClick={() => setFilterCabinet('Tous')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase ${filterCabinet === 'Tous' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}>Tous</button>{cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase ${filterCabinet === c ? 'bg-teal-600 text-white' : 'text-slate-500'}`}>{c}</button>)}</div>
                                 </header>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <StatCard isDarkMode={isDarkMode} title="CA Encaissé" value={`${currentData.encaisse.toLocaleString()} €`} subValue={`Total ${currentData.total}€`} iconName="Wallet" colorClass="bg-teal-600" />
-                                    <StatCard isDarkMode={isDarkMode} title="Impayés" value={`${currentData.attendu.toLocaleString()} €`} subValue={`${currentData.items.filter(s=>!s.isPaid).length} séance(s)`} iconName="Clock" colorClass="bg-red-600" />
-                                    <StatCard isDarkMode={isDarkMode} title="Tarif Moyen" value={`${currentData.count > 0 ? (currentData.total / currentData.count).toFixed(0) : 0} €`} subValue={`${currentData.count} consultations total`} iconName="TrendingUp" colorClass="bg-teal-600" />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <StatCard isDarkMode={isDarkMode} title="CA Acté (Volume)" value={`${stats.acté.toLocaleString()}€`} subValue="Tout le travail encodé" iconName="Activity" colorClass="bg-slate-600" />
+                                    <StatCard isDarkMode={isDarkMode} highlight={true} title="En Banque (Trésorerie)" value={`${stats.tresorerie.toLocaleString()}€`} subValue={`M-1 Inami payé : ${stats.inamiPrevEncaissé}€`} iconName="Banknote" colorClass="bg-teal-600" 
+                                        actions={
+                                            stats.inamiPrevAttente > 0 ? (
+                                                <button onClick={() => handleInamiStatusChange(true, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 bg-teal-500 text-slate-950 text-[8px] font-black rounded-lg uppercase shadow-lg animate-pulse">Encaisser INAMI M-1 ({stats.inamiPrevAttente}€)</button>
+                                            ) : (stats.inamiPrevEncaissé > 0 ? (
+                                                <button onClick={() => handleInamiStatusChange(false, new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))} className="w-full py-2 border-2 border-teal-500/30 text-teal-500 text-[8px] font-black rounded-lg uppercase hover:bg-teal-500/10 transition-all">Annuler encaissement ({stats.inamiPrevEncaissé}€)</button>
+                                            ) : null)
+                                        }
+                                    />
+                                    <StatCard isDarkMode={isDarkMode} title="En Attente (M)" value={`${stats.attenteMois.toLocaleString()}€`} subValue="Impayés de cette période" iconName="Clock" colorClass="bg-orange-500" />
+                                    <StatCard isDarkMode={isDarkMode} title="Tarif Moyen" value={`${stats.count > 0 ? (stats.acté / stats.count).toFixed(0) : 0}€`} subValue={`${stats.count} séances`} iconName="TrendingUp" colorClass="bg-teal-600" />
                                 </div>
-                                {activeTab === 'dash_month' && <div className="grid grid-cols-2 gap-4"><MiniStat isDarkMode={isDarkMode} label="Séances Présentiel" value={currentData.presCount} iconName="MapPin" /><MiniStat isDarkMode={isDarkMode} label="Séances Visio" value={currentData.visioCount} iconName="Video" /></div>}
+
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                                    {[ 
-                                        { t: "Répartition Services", d: currentData.catData, c: tColors, type: "vol" }, 
-                                        { t: "Lieu des Séances", d: currentData.modData, c: [isDarkMode ? '#334155' : '#1e293b', '#2dd4bf'], type: "vol" }, 
-                                        { t: "CA par Paiement (€)", d: currentData.payData, c: tColors.slice(3), type: "val" } 
-                                    ].map((chart, i) => (
-                                        <div key={i} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border h-[340px] flex flex-col backdrop-blur-sm`}>
-                                            <h3 className="text-[9px] font-black uppercase tracking-widest mb-4 opacity-50">{chart.t}</h3>
-                                            <div className="flex-1">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <PieChart>
-                                                        <Pie data={chart.d.filter(x => x.value > 0)} innerRadius={50} outerRadius={70} dataKey="value" stroke="none" label={(p) => renderPieLabel(p, isDarkMode)}>
-                                                            {chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}
-                                                        </Pie>
-                                                        <Tooltip 
-                                                            formatter={(v) => chart.type === "val" ? `${v.toLocaleString()} €` : `${v} séance(s)`}
-                                                            contentStyle={{ borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: '10px' }} 
-                                                        />
-                                                        <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: '9px', paddingTop: '20px' }} />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
+                                    {[{t:"Services", d:stats.catData, c:tColors}, {t:"Lieu", d:stats.modData, c:['#1e293b', '#2dd4bf']}, {t:"CA Paiements", d:stats.payData, c:tColors.slice(3)}].map((chart, i) => (
+                                        <div key={i} className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl h-[340px] flex flex-col shadow-lg backdrop-blur-sm"><h3 className="text-[9px] font-black uppercase tracking-widest mb-4 opacity-50">{chart.t}</h3><div className="flex-1">
+                                            <RCResponsiveContainer width="100%" height="100%">
+                                                <RCPieChart>
+                                                    <RCPie data={chart.d.filter(x=>x.value>0)} innerRadius={55} outerRadius={75} dataKey="value" stroke="none" label={renderPieLabelLocal}>
+                                                        {chart.d.map((_, j)=><RCCell key={j} fill={chart.c[j % chart.c.length]} />)}
+                                                    </RCPie>
+                                                    <RCTooltip contentStyle={{borderRadius:'12px', border:'none', backgroundColor:'#0f172a', color:'#fff', fontSize:'10px'}} />
+                                                    <RCLegend verticalAlign="bottom" wrapperStyle={{fontSize:'9px', paddingTop:'20px'}} />
+                                                </RCPieChart>
+                                            </RCResponsiveContainer>
+                                        </div></div>
                                     ))}
                                 </div>
+                                
                                 {activeTab === 'dash_year' && (
-                                    <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-8 rounded-psy border h-[400px] flex flex-col shadow-2xl transition-all`}>
-                                        <h3 className="text-[9px] font-black uppercase tracking-widest mb-6 opacity-50 text-center">Évolution Mensuelle par Cabinet (€)</h3>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={stats.comparison}>
-                                                <CartesianGrid vertical={false} stroke={isDarkMode ? '#1e293b' : '#f1f5f9'} />
-                                                <XAxis dataKey="name" axisLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                                                <YAxis hide />
-                                                <Tooltip formatter={(v) => `${v.toLocaleString()} €`} contentStyle={{borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', color: '#fff'}} />
-                                                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                                    <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-2xl h-[400px] flex flex-col shadow-2xl transition-all backdrop-blur-sm">
+                                        <h3 className="text-[9px] font-black uppercase tracking-widest mb-6 opacity-50 text-center">CA Mensuel par Cabinet (€)</h3>
+                                        <RCResponsiveContainer width="100%" height="100%">
+                                            <RCBarChart data={stats.comparison}>
+                                                <RCCartesianGrid vertical={false} stroke={isDarkMode ? '#1e293b' : '#f1f5f9'} />
+                                                <RCXAxis dataKey="name" axisLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                                                <RCYAxis hide />
+                                                <RCTooltip formatter={(v) => `${v.toLocaleString()} €`} contentStyle={{borderRadius: '15px', border: 'none', backgroundColor: '#0f172a', color: '#fff'}} />
+                                                <RCLegend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
                                                 {cabinets.map((c, i) => (
-                                                    <Bar key={c} dataKey={c} fill={i === 0 ? '#2dd4bf' : (isDarkMode ? '#1e293b' : '#cbd5e1')} radius={[5, 5, 0, 0]} barSize={25}>
-                                                        <LabelList dataKey={c} position="top" style={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 8, fontWeight: 'bold' }} formatter={(v) => v > 0 ? `${v}€` : ''} />
-                                                    </Bar>
+                                                    <RCBar key={c} dataKey={c} fill={i === 0 ? '#2dd4bf' : (isDarkMode ? '#1e293b' : '#cbd5e1')} radius={[5, 5, 0, 0]} barSize={25}>
+                                                        <RCLabelList dataKey={c} position="top" style={{ fill: isDarkMode ? '#94a3b8' : '#64748b', fontSize: 8, fontWeight: 'bold' }} formatter={(v) => v > 0 ? `${v}€` : ''} />
+                                                    </RCBar>
                                                 ))}
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                            </RCBarChart>
+                                        </RCResponsiveContainer>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {activeTab === 'add' && <div className="max-w-lg mx-auto page-transition pt-4 px-2"><header className="mb-8 flex justify-between items-center px-2"><div><h2 className="text-2xl font-black uppercase tracking-tighter leading-none">{editingSession ? "Modification" : "Nouvelle Saisie"}</h2><p className="text-[10px] text-teal-600 font-bold uppercase tracking-widest mt-1">consult tracker</p></div><button onClick={() => { setActiveTab('dash_month'); setEditingSession(null); }} className={`p-2 rounded-full ${isDarkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}><Icon name="X" size={24} /></button></header>{renderForm(saveSession, "Enregistrer la séance")}</div>}
+                        {activeTab === 'add' && <div className="max-w-lg mx-auto page-transition pt-4 px-2"><header className="mb-8 flex justify-between items-center px-2"><div><h2 className="text-2xl font-black uppercase tracking-tighter leading-none">{editingSession ? "Modification" : "Nouvelle Saisie"}</h2><p className="text-[10px] text-teal-600 font-bold uppercase tracking-widest mt-1">consult tracker</p></div><button onClick={() => { setActiveTab('dash_month'); setEditingSession(null); }} className="p-2 text-slate-500 shadow-sm"><Icon name="X" size={24} /></button></header>{renderForm(handleSave, "Valider")}</div>}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-4 page-transition px-2">
-                                <header className="flex justify-between items-center mb-8 px-4"><div className="flex items-center gap-3"><button onClick={() => setActiveTab('dash_month')} className={`p-2 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ArrowLeft" /></button><h2 className="text-xl font-black uppercase tracking-tighter">Journal</h2></div><button onClick={handleExport} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} hover:scale-105 transition-all`}><Icon name="FileSpreadsheet" size={18} /></button></header>
-                                {sessions.length === 0 ? (
-                                    <div className="text-center py-32 space-y-6"><div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto opacity-20 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}><Icon name="Layout" size={40} /></div><p className="text-xs font-black uppercase tracking-widest opacity-40">Votre journal est vide</p><div className="flex flex-col gap-2 max-w-xs mx-auto"><button onClick={() => setActiveTab('add')} className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl transition-all ${isDarkMode ? 'bg-teal-500 text-slate-950' : 'bg-slate-900 text-white'}`}>Encoder une séance</button></div></div>
-                                ) : (
-                                    sessions.map(s => (
-                                        <div key={s.id} className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-md'} p-6 rounded-psy border flex flex-col shadow-lg transition-all`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-5">
-                                                    <div className={`w-14 h-14 rounded-3xl flex items-center justify-center text-teal-600 ${isDarkMode ? 'bg-teal-500/10' : 'bg-teal-50 border border-teal-100'}`}><Icon name={s.category === 'Couple' ? 'Users' : 'User'} size={24} /></div>
-                                                    <div className="space-y-1">
-                                                        <p className={`text-sm font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{s.clientName || 'Patient Anonyme'}</p>
-                                                        <p className={`text-[10px] font-bold uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                                            {s.category} <span className="mx-1 opacity-50">•</span> {s.cabinet} <span className="mx-1 opacity-50">•</span> {s.paymentMethod}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right flex flex-col items-end gap-1">
-                                                    <p className={`text-xl font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{s.amount}€</p>
-                                                    <button onClick={() => togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-600 border-teal-500/20' : 'bg-red-600 text-white border-red-600'}`}>{s.isPaid ? 'Payé' : 'À payer'}</button>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="mt-4 pt-4 border-t border-slate-800/20 flex flex-col gap-3">
-                                                {s.notes && (
-                                                    <div className={`${isDarkMode ? 'bg-slate-950/50' : 'bg-slate-50'} p-3 rounded-2xl`}>
-                                                        <p className={`text-[10px] italic leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{s.notes}</p>
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center justify-between">
-                                                    <p className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${s.isCancellation ? 'bg-orange-500/20 text-orange-500' : (isDarkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400')}`}>
-                                                        {new Date(s.date).toLocaleDateString('fr-FR', {day:'2-digit', month:'short'})} {s.isCancellation && '• ANNULÉ'}
-                                                    </p>
-                                                    <div className="flex items-center gap-1">
-                                                        <button onClick={() => startEditing(s)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800 text-slate-600 hover:text-teal-400' : 'hover:bg-slate-50 text-slate-400 hover:text-teal-600'}`}><Icon name="Edit2" size={14}/></button>
-                                                        <button onClick={() => setDeleteId(s.id)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/10 text-slate-600 hover:text-red-500' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'}`}><Icon name="Trash2" size={14}/></button>
-                                                    </div>
-                                                </div>
-                                            </div>
+                            <div className="space-y-8 page-transition px-2 pb-32">
+                                <header className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => handleNav(-1)} className="p-2 rounded-xl border border-slate-800 shadow-sm"><Icon name="ChevronLeft" /></button>
+                                        <div className="flex flex-col">
+                                            <h2 className="text-xl font-black uppercase tracking-tighter">{new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(viewDate)}</h2>
+                                            <p className="text-[8px] font-black uppercase text-teal-600 tracking-widest">Journal Hebdomadaire</p>
                                         </div>
-                                    ))
-                                )}
+                                        <button onClick={() => handleNav(1)} className="p-2 rounded-xl border border-slate-800 shadow-sm"><Icon name="ChevronRight" /></button>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2 self-end sm:self-center">
+                                        {anyInamiInMonth && (
+                                            <button 
+                                                onClick={() => handleInamiStatusUpdate(!allInamiPaidInMonth)} 
+                                                className={`px-4 py-2.5 rounded-xl font-black text-[9px] uppercase border transition-all flex items-center gap-2 ${allInamiPaidInMonth ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-teal-500/10 border-teal-500/30 text-teal-500 animate-pulse'}`}
+                                            >
+                                                <Icon name={allInamiPaidInMonth ? "RotateCcw" : "CheckCircle"} size={12} />
+                                                {allInamiPaidInMonth ? "INAMI : Tout mettre 'À payer'" : "INAMI : Tout mettre 'Payé'"}
+                                            </button>
+                                        )}
+                                        <button onClick={() => {const h=["Date","Cabinet","Patient","Service","Statut","Montant"]; const r=sessions.map(s=>[s.date,s.cabinet,s.clientName||"N/A",s.category,s.isPaid?"Paye":"Impaye",s.amount]); const csv=[h.join(","),...r.map(e=>e.join(","))].join("\n"); const b=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download="export.csv"; a.click();}} className="p-3 rounded-xl border border-slate-800 shadow-sm"><Icon name="FileSpreadsheet" size={18}/></button>
+                                    </div>
+                                </header>
+                                
+                                {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
+                                    <div key={wName} className="space-y-4">
+                                        <div className="flex items-center justify-between border-b border-teal-500/20 pb-2 px-2">
+                                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-teal-500">{wName}</h3>
+                                            <p className="text-[10px] font-black opacity-30">{wSessions.reduce((acc,s)=>acc+parseFloat(s.amount||0),0)}€</p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {wSessions.map(s => renderSessionCard(s))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 
                         {activeTab === 'settings' && (
-                            <div className="max-w-lg mx-auto space-y-6 page-transition px-2">
-                                <h2 className="text-xl font-black uppercase tracking-tighter mb-8 text-center">Configuration</h2>
-                                <div className={`${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-lg'} p-8 rounded-psy border space-y-10`}>
-                                    <div className="space-y-6"><div className="flex items-center justify-between"><label className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Thème Sombre</label><button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({ isDarkMode: !isDarkMode }); }} className={`w-14 h-8 rounded-full transition-all relative ${isDarkMode ? 'bg-teal-500' : 'bg-slate-200'}`}><div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-sm transition-all ${isDarkMode ? 'left-7' : 'left-1'}`} /></button></div><div className="space-y-4 pt-4 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><label className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>Interface Zoom</label><span className="text-teal-600 font-black text-xs">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e => { setZoomLevel(parseInt(e.target.value)); updateSettings({ zoomLevel: parseInt(e.target.value) }); }} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500 mr-4" /></div></div>
-                                    {[ { label: "Cabinets", state: cabinets, icon: 'MapPin', key: 'cabinets' }, { label: "Types de Services", state: categories, icon: 'Stethoscope', key: 'categories' }, { label: "Moyens de Paiement", state: paymentMethods, icon: 'CreditCard', key: 'paymentMethods' } ].map((list, idx) => (
-                                        <div key={idx} className="space-y-4 pt-6 border-t border-slate-800/20"><div className="flex justify-between items-center mb-2"><p className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}><Icon name={list.icon} size={12} /> {list.label}</p><button onClick={() => { const n = [...list.state, `Nouveau`]; updateSettings({ [list.key]: n }); }} className="p-2 bg-teal-500/10 text-teal-600 rounded-lg"><Icon name="Plus" size={14}/></button></div><div className="space-y-2">{list.state.map((item, i) => (<div key={i} className="flex gap-2"><input type="text" value={item} onChange={e => { const n = [...list.state]; n[i] = e.target.value; updateSettings({ [list.key]: n }); }} className={`flex-1 p-3 rounded-xl border text-[10px] font-black uppercase outline-none focus:border-teal-500 ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} /><button onClick={() => { const n = list.state.filter((_, idx) => idx !== i); updateSettings({ [list.key]: n }); }} disabled={list.state.length <= 1} className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl disabled:opacity-20 transition-all"><Icon name="X" size={16}/></button></div>))}</div></div>
-                                    ))}
+                            <div className="max-w-lg mx-auto space-y-6 page-transition px-2 pb-32">
+                                <h2 className="text-xl font-black uppercase tracking-tighter text-center">Réglages</h2>
+                                <div className="bg-slate-900 border border-slate-800 p-8 rounded-psy space-y-8 shadow-2xl backdrop-blur-sm">
+                                    <div className="flex items-center justify-between"><label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mode Sombre</label><button onClick={()=>{setIsDarkMode(!isDarkMode);}} className={`w-12 h-6 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${isDarkMode?'left-7':'left-1'}`} /></button></div>
+                                    <div className="space-y-4 pt-4 border-t border-slate-800/40"><label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Zoom Interface : {zoomLevel}%</label><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} className="w-full h-1 bg-slate-800 rounded-lg appearance-none accent-teal-500" /></div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-28 backdrop-blur-3xl border-t flex items-center justify-around px-6 z-50 transition-all ${isDarkMode ? 'bg-slate-950/95 border-slate-900' : 'bg-white/95 border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]'}`}>
-                        {NAV_TABS.map(item => <button key={item.id} onClick={() => {setActiveTab(item.id); setEditingSession(null);}} className={`flex flex-col items-center gap-2 transition-all ${activeTab === item.id ? 'text-teal-600 scale-110 font-black' : 'text-slate-500 opacity-60'}`}><div className={`p-2 rounded-2xl ${activeTab === item.id ? 'bg-teal-500/10' : ''}`}><Icon name={item.id === 'dash_month' ? 'Calendar' : item.id === 'dash_year' ? 'BarChart3' : item.id === 'history' ? 'BookOpen' : 'Settings'} size={24} /></div><span className="text-[7px] font-black uppercase tracking-widest">{item.label}</span></button>)}
+                    <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-24 backdrop-blur-3xl border-t flex items-center justify-around px-4 z-50 ${isDarkMode ? 'bg-slate-950/95 border-slate-900 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]' : 'bg-white/95 border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]'}`}>
+                        {NAV_TABS.map(item => <button key={item.id} onClick={() => {setActiveTab(item.id); setEditingSession(null);}} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === item.id ? 'text-teal-600 scale-110 font-black' : 'text-slate-500 opacity-60'}`}><div className={`p-2 rounded-2xl ${activeTab === item.id ? 'bg-teal-500/10' : ''}`}><Icon name={item.id==='dash_month'?'Calendar':item.id==='dash_year'?'BarChart3':item.id==='history'?'BookOpen':'Settings'} size={22} /></div><span className="text-[7px] font-black uppercase tracking-widest">{item.label}</span></button>)}
                     </nav>
 
                     {deleteId && (
-                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6"><div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} p-8 rounded-psy w-full max-w-xs text-center space-y-6 shadow-2xl border`}><div className="w-16 h-16 bg-red-500/10 text-red-600 rounded-full flex items-center justify-center mx-auto"><Icon name="AlertCircle" size={32} /></div><h3 className={`font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Supprimer ?</h3><div className="flex gap-2"><button onClick={() => setDeleteId(null)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Non</button><button onClick={removeSession} className="flex-1 py-4 rounded-2xl bg-red-600 text-white text-[10px] font-black uppercase shadow-lg">Oui</button></div></div></div>
+                        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-6"><div className="bg-slate-900 border border-slate-800 p-8 rounded-psy w-full max-w-xs text-center space-y-6 shadow-2xl"><Icon name="AlertCircle" size={32} className="text-red-500 mx-auto" /><h3 className="font-black uppercase tracking-tighter">Supprimer ?</h3><div className="flex gap-2"><button onClick={()=>setDeleteId(null)} className="flex-1 py-4 rounded-xl bg-slate-800 text-[10px] font-black uppercase">Non</button><button onClick={async()=>{await deleteDoc(doc(db,'artifacts',appIdGlobal,'public','data', 'sessions',deleteId));setDeleteId(null);}} className="flex-1 py-4 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase">Oui</button></div></div></div>
                     )}
                 </div>
             );
