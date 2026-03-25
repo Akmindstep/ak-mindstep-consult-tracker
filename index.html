@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Ak Mindstep | consult tracker</title>
+    <title>AK MINDSTEP | consult tracker</title>
     
     <!-- Dépendances -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -17,14 +17,36 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        :root { --rounded-psy: 1.5rem; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; color: #f8fafc; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        :root { --rounded-psy: 1rem; }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #020617; 
+            color: #f8fafc;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
         .rounded-psy { border-radius: var(--rounded-psy); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .card-elegant { 
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .card-elegant:hover {
+            border-color: #334155;
+        }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .animate-progress { animation: progress 2s ease-in-out infinite; }
         @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+        .page-transition { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #1e293b; border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { height: 18px; width: 18px; border-radius: 50%; background: #2dd4bf; cursor: pointer; -webkit-appearance: none; margin-top: -7px; box-shadow: 0 0 10px rgba(45, 212, 191, 0.3); }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
     </style>
 </head>
 <body>
@@ -67,7 +89,7 @@
             { id: 'settings', label: 'Réglages', icon: 'Settings' }
         ];
 
-        const COLORS_DARK = ['#2dd4bf', '#818cf8', '#fbbf24', '#f43f5e', '#a855f7', '#22d3ee'];
+        const CHART_COLORS = ['#2dd4bf', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6', '#10b981', '#f97316'];
 
         // --- COMPOSANTS UI ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -79,19 +101,22 @@
             ) : null;
         };
 
-        const StatCard = ({ title, value, subValue, iconName, colorClass, highlight, children }) => (
-            <div className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${highlight ? 'bg-teal-950/20 border-teal-500/40' : 'bg-slate-900 border-slate-800 shadow-xl'}`}>
-                <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{title}</span>
-                    <div className={`w-7 h-7 rounded-lg ${colorClass} bg-opacity-20 flex items-center justify-center`}><Icon name={iconName} size={14} className={colorClass.replace('bg-', 'text-')} /></div>
+        const StatCard = ({ title, value, subValue, iconName, colorClass, highlight, children, isDarkMode }) => (
+            <div className={`p-6 rounded-2xl border transition-all relative overflow-hidden ${highlight ? 'bg-teal-950/20 border-teal-500/30' : (isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}`}>
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</span>
+                    <div className={`w-9 h-9 rounded-xl ${colorClass} bg-opacity-10 flex items-center justify-center shrink-0`}>
+                        <Icon name={iconName} size={16} className={colorClass.replace('bg-', 'text-')} />
+                    </div>
                 </div>
-                <div className="text-2xl font-black tracking-tight">{value}</div>
-                <div className="text-[10px] font-bold text-slate-400 mt-1">{subValue}</div>
+                <div className={`text-3xl font-black tracking-tight mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{subValue}</div>
                 {children}
             </div>
         );
 
         function App() {
+            // --- ÉTATS ---
             const [user, setUser] = React.useState(null);
             const [libsReady, setLibsReady] = React.useState(false);
             const [sessions, setSessions] = React.useState([]);
@@ -99,19 +124,29 @@
             const [loading, setLoading] = React.useState(true);
             const [activeTab, setActiveTab] = React.useState('dash_month');
             const [viewDate, setViewDate] = React.useState(new Date());
-            const [filterCabinet, setFilterCabinet] = React.useState('Tous');
             const [isDarkMode, setIsDarkMode] = React.useState(true);
+            const [zoomLevel, setZoomLevel] = React.useState(100);
+            const [filterCabinet, setFilterCabinet] = React.useState('Tous');
 
-            const cabinets = ['Koekelberg', 'Bruxelles-Sud'];
-            const categories = ['Individuelle', 'Couple', 'Familiale'];
-            
+            const [cabinets, setCabinets] = React.useState(['Koekelberg', 'Bruxelles-Sud']);
+            const [categories, setCategories] = React.useState(['Individuelle', 'Couple', 'Familiale']);
+
             const [formData, setFormData] = React.useState({
-                amount: '', cabinet: 'Koekelberg', category: 'Individuelle',
+                amount: '', cabinet: '', category: '',
                 date: new Date().toISOString().split('T')[0], modality: 'Présentiel',
                 paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '', notes: ''
             });
 
-            // Initialisation
+            // --- VARIABLES DE RENDU ---
+            const monthTitle = new Intl.DateTimeFormat('fr-FR', {month:'long', year:'numeric'}).format(viewDate);
+            const monthKey = `${viewDate.getFullYear()}-${(viewDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            const yearKey = viewDate.getFullYear().toString();
+
+            // --- RECHARTS ---
+            const Recharts = window.Recharts || {};
+            const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = Recharts;
+
+            // --- INITIALISATION & LISTENERS ---
             React.useEffect(() => {
                 const check = setInterval(() => { if (window.lucide && window.Recharts?.ResponsiveContainer) { setLibsReady(true); clearInterval(check); } }, 500);
                 const unsubAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); else signInAnonymously(auth); });
@@ -124,46 +159,75 @@
                     setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     setLoading(false);
                 });
-                const unsubInami = onSnapshot(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_received'), (snap) => {
+                const unsubInami = onSnapshot(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_manual'), (snap) => {
                     const data = {};
                     snap.docs.forEach(d => data[d.id] = d.data().amount || 0);
                     setInamiReceipts(data);
                 });
-                return () => { unsubSessions(); unsubInami(); };
+                const unsubSettings = onSnapshot(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), (snap) => {
+                    if (snap.exists()) {
+                        const d = snap.data();
+                        if (d.cabinets) setCabinets(d.cabinets);
+                        if (d.categories) setCategories(d.categories);
+                        if (d.zoomLevel) setZoomLevel(d.zoomLevel);
+                        if (d.isDarkMode !== undefined) setIsDarkMode(d.isDarkMode);
+                    }
+                });
+                return () => { unsubSessions(); unsubInami(); unsubSettings(); };
             }, [user]);
 
-            // --- CALCULS ---
+            // --- CALCULS STATS ---
             const stats = React.useMemo(() => {
-                const selMonth = viewDate.getMonth();
                 const selYear = viewDate.getFullYear();
-                const monthKey = `${selYear}-${(selMonth + 1).toString().padStart(2, '0')}`;
-
-                const currentSessions = sessions.filter(s => s.date.startsWith(monthKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
-
+                
+                // --- MONTH DATA ---
+                const curSessions = sessions.filter(s => s.date.startsWith(monthKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
+                const caActé = curSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const manualInami = inamiReceipts[monthKey] || 0;
-                const paidDirect = currentSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const unpaid = currentSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const paidImmediate = curSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const totalWaiting = curSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+
+                // --- YEAR DATA ---
+                const yearSessions = sessions.filter(s => s.date.startsWith(yearKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
+                const yearCaActé = yearSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const yearWaiting = yearSessions.filter(s => !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                
+                let yearInamiManual = 0;
+                Object.keys(inamiReceipts).forEach(k => { if(k.startsWith(yearKey)) yearInamiManual += inamiReceipts[k]; });
+                const yearPaidImmediate = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+
+                // Bar Chart Comparison
+                const comparisonData = Array.from({ length: 12 }, (_, i) => {
+                    const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
+                    const entry = { name: monthLabel };
+                    cabinets.forEach(cab => {
+                        entry[cab] = sessions.filter(s => s.date.startsWith(`${selYear}-${(i+1).toString().padStart(2,'0')}`) && s.cabinet === cab).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                    });
+                    return entry;
+                });
+
+                const getPieData = (dataArray) => {
+                    return {
+                        cat: categories.map(c => ({ name: c, value: dataArray.filter(s => s.category === c).length })),
+                        mod: [{ name: 'Présentiel', value: dataArray.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: dataArray.filter(s => s.modality === 'Visio').length }],
+                        pay: [
+                            { name: 'INAMI (Acté)', value: dataArray.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                            { name: 'Espèces', value: dataArray.filter(s => s.paymentMethod === 'Espèces').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                            { name: 'Bancaire', value: dataArray.filter(s => s.paymentMethod === 'Virement bancaire').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) }
+                        ]
+                    }
+                };
 
                 return {
-                    caActé: currentSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0),
-                    enBanque: Math.round((paidDirect + manualInami) * 100) / 100,
-                    enAttente: Math.round(unpaid * 100) / 100,
-                    manualInami,
-                    monthKey,
-                    count: currentSessions.length,
-                    catData: categories.map(c => ({ name: c, value: currentSessions.filter(s => s.category === c).length })),
-                    modData: [{ name: 'Présentiel', value: currentSessions.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: currentSessions.filter(s => s.modality === 'Visio').length }],
-                    payData: [
-                        { name: 'Virement/Espèces', value: paidDirect },
-                        { name: 'Saisie INAMI', value: manualInami }
-                    ]
+                    month: { caActé, enBanque: Math.round((paidImmediate + manualInami) * 100) / 100, enAttente: Math.round(totalWaiting * 100) / 100, manualInami, count: curSessions.length, ...getPieData(curSessions) },
+                    year: { caActé: yearCaActé, enBanque: Math.round((yearPaidImmediate + yearInamiManual) * 100) / 100, enAttente: Math.round(yearWaiting * 100) / 100, count: yearSessions.length, ...getPieData(yearSessions) },
+                    comparisonData
                 };
-            }, [sessions, viewDate, filterCabinet, inamiReceipts]);
+            }, [sessions, monthKey, yearKey, inamiReceipts, categories, filterCabinet, cabinets, viewDate]);
 
             const groupedWeeks = React.useMemo(() => {
-                const prefix = `${viewDate.getFullYear()}-${(viewDate.getMonth() + 1).toString().padStart(2, '0')}`;
                 const res = { "Semaine 1": [], "Semaine 2": [], "Semaine 3": [], "Semaine 4": [], "Semaine 5": [] };
-                sessions.filter(s => s.date.startsWith(prefix)).sort((a, b) => b.date.localeCompare(a.date)).forEach(s => {
+                sessions.filter(s => s.date.startsWith(monthKey)).sort((a, b) => a.date.localeCompare(b.date)).forEach(s => {
                     const day = parseInt(s.date.split('-')[2]);
                     if (day <= 7) res["Semaine 1"].push(s);
                     else if (day <= 14) res["Semaine 2"].push(s);
@@ -172,11 +236,15 @@
                     else res["Semaine 5"].push(s);
                 });
                 return res;
-            }, [sessions, viewDate]);
+            }, [sessions, monthKey]);
 
             // --- ACTIONS ---
-            const saveManualInami = async (val) => {
-                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_received', stats.monthKey), { amount: parseFloat(val) || 0 });
+            const updateRemoteSettings = async (newData) => {
+                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), newData, { merge: true });
+            };
+
+            const saveInamiValue = async (val) => {
+                await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_manual', monthKey), { amount: parseFloat(val) || 0 });
             };
 
             const togglePaid = async (s) => {
@@ -185,130 +253,207 @@
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                await addDoc(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions'), { ...formData, amount: parseFloat(formData.amount), createdAt: new Date().toISOString() });
-                setFormData({ ...formData, amount: '', clientName: '', notes: '', isCancellation: false });
+                await addDoc(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions'), { 
+                    ...formData, 
+                    cabinet: formData.cabinet || cabinets[0],
+                    category: formData.category || categories[0],
+                    amount: parseFloat(formData.amount), 
+                    createdAt: new Date().toISOString() 
+                });
+                setFormData({ ...formData, amount: '', clientName: '', notes: '', isCancellation: false, date: new Date().toISOString().split('T')[0], modality: 'Présentiel', isPaid: true });
                 setActiveTab('history');
-            };
-
-            const deleteSession = async (id) => {
-                if (window.confirm("Supprimer cette séance ?")) {
-                    await deleteDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', id));
-                }
             };
 
             if (loading || !libsReady) return (
                 <div className="h-screen flex flex-col items-center justify-center p-10 bg-slate-950">
-                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden mb-4"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-500">Sync Ak Mindstep...</p>
+                    <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mb-6"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-teal-500">AK MINDSTEP...</p>
                 </div>
             );
 
-            const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } = window.Recharts;
-            const monthLabel = new Intl.DateTimeFormat('fr-FR', {month:'long', year:'numeric'}).format(viewDate);
+            // --- TOOLTIP STYLE ---
+            const tooltipStyle = {
+                backgroundColor: '#0f172a',
+                border: '1px solid #334155',
+                borderRadius: '0.75rem',
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#fff',
+                padding: '12px',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)'
+            };
+
+            const renderDistributionCharts = (data) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[
+                        { t: "Répartition Services", d: data.cat, c: CHART_COLORS },
+                        { t: "Lieu de Consultation", d: data.mod, c: ['#1e293b', '#2dd4bf'] },
+                        { t: "Moyens de Paiement", d: data.pay, c: ['#6366f1', '#fbbf24', '#2dd4bf'] }
+                    ].map((chart, i) => (
+                        <div key={i} className={`p-8 rounded-[2rem] border h-[420px] flex flex-col ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
+                            <h3 className="text-[10px] font-black uppercase text-slate-500 mb-8 tracking-[0.2em] text-center border-b border-slate-800/20 pb-4">{chart.t}</h3>
+                            <div className="flex-1">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={chart.d.filter(d=>d.value>0)} innerRadius={70} outerRadius={90} dataKey="value" stroke={isDarkMode ? "#020617" : "#fff"} strokeWidth={3} paddingAngle={8} label={(p) => <text x={p.cx + (p.outerRadius + 20) * Math.cos(-p.midAngle * Math.PI / 180)} y={p.cy + (p.outerRadius + 20) * Math.sin(-p.midAngle * Math.PI / 180)} fill={isDarkMode ? "#94a3b8" : "#64748b"} textAnchor={p.x > p.cx ? 'start' : 'end'} dominantBaseline="central" className="text-[10px] font-black">{p.value}</text>}>
+                                            {chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}
+                                        </Pie>
+                                        <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#fff' }} />
+                                        <Legend verticalAlign="bottom" wrapperStyle={{fontSize:'9px', paddingTop:'30px', fontWeight:'700', textTransform:'uppercase'}} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
 
             return (
-                <div className={`min-h-screen pb-32 transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50 text-slate-900'}`}>
+                <div className={`min-h-screen pb-32 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
                     
-                    <header className="hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
-                        <div className="flex items-center gap-3"><div className="p-2 bg-teal-500 rounded-lg text-slate-950"><Icon name="Activity" /></div><h1 className="font-black uppercase tracking-tighter">Ak Mindstep</h1></div>
-                        <nav className="flex h-full">{NAV_TABS.map(t => <button key={t.id} onClick={() => setActiveTab(t.id)} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest ${activeTab === t.id ? 'text-teal-500' : 'text-slate-500'}`}>{t.label}</button>)}</nav>
-                        <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 border border-slate-800 rounded-xl"><Icon name={isDarkMode ? 'Sun' : 'Moon'} /></button>
+                    {/* Header Desktop */}
+                    <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/90 border-slate-900' : 'bg-white/90 border-slate-200 shadow-sm'}`}>
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg shadow-teal-500/20"><Icon name="Activity" /></div>
+                            <h1 className={`font-black text-lg uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>AK MINDSTEP <span className="font-medium opacity-50 ml-1">| consult tracker</span></h1>
+                        </div>
+                        <nav className="flex items-center gap-2 h-full">
+                            {NAV_TABS.map(t => <button key={t.id} onClick={() => setActiveTab(t.id)} className={`px-8 h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === t.id ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-500 hover:text-teal-400'}`}>{t.label}</button>)}
+                        </nav>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border-2 rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18}/></button>
                     </header>
 
-                    <button onClick={() => setActiveTab('add')} className="fixed z-[60] bottom-28 right-6 md:bottom-10 md:right-10 w-16 h-16 rounded-full bg-teal-500 shadow-2xl flex items-center justify-center text-slate-950"><Icon name="Plus" size={32} /></button>
+                    <button onClick={() => setActiveTab('add')} className="fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-14 h-14 rounded-full bg-teal-500 shadow-2xl flex items-center justify-center text-slate-950 hover:scale-110 active:scale-95 transition-all"><Icon name="Plus" size={28} /></button>
 
-                    <main className="p-4 md:p-10 max-w-6xl mx-auto space-y-8">
+                    <main className="p-4 md:p-12 max-w-7xl mx-auto space-y-12">
                         {activeTab === 'dash_month' && (
-                            <div className="space-y-6 page-transition">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div className="flex items-center gap-3"><button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-2 rounded-xl bg-slate-900 border border-slate-800"><Icon name="ChevronLeft" /></button><h2 className="text-2xl font-black uppercase tracking-tighter">{monthLabel}</h2><button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-2 rounded-xl bg-slate-900 border border-slate-800"><Icon name="ChevronRight" /></button></div>
-                                    <select value={filterCabinet} onChange={e => setFilterCabinet(e.target.value)} className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl text-[10px] font-black uppercase outline-none">{['Tous', ...cabinets].map(c => <option key={c} value={c}>{c}</option>)}</select>
+                            <div className="space-y-10 page-transition">
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
+                                    <div className="flex items-center gap-5">
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className={`p-3 rounded-xl border-2 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
+                                        <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{monthTitle}</h2>
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className={`p-3 rounded-xl border-2 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}><Icon name="ChevronRight" /></button>
+                                    </div>
+                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                        <button onClick={() => setFilterCabinet('Tous')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === 'Tous' ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>Tous</button>
+                                        {cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <StatCard title="CA Acté (Travail)" value={`${stats.caActé.toLocaleString()}€`} subValue="Volume total encodé ce mois" iconName="Activity" colorClass="bg-slate-600" />
-                                    
-                                    <StatCard title="En Banque (Réel)" value={`${stats.enBanque.toLocaleString()}€`} subValue="Argent réellement reçu" iconName="Banknote" colorClass="bg-teal-600" highlight={true}>
-                                        <div className="mt-4 pt-4 border-t border-slate-800/60">
-                                            <label className="text-[8px] font-black uppercase text-slate-500 block mb-2">Virement Mutuelle reçu (€) :</label>
-                                            <input 
-                                                type="number" 
-                                                placeholder="0.00"
-                                                className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs font-black outline-none focus:border-teal-500"
-                                                defaultValue={stats.manualInami || ''}
-                                                onBlur={(e) => saveManualInami(e.target.value)}
-                                            />
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <StatCard isDarkMode={isDarkMode} title="CA Acté (Volume)" value={`${stats.month.caActé.toLocaleString()} €`} subValue="Total séances encodées" iconName="Activity" colorClass="bg-slate-400" />
+                                    <StatCard isDarkMode={isDarkMode} title="Solde en Banque" value={`${stats.month.enBanque.toLocaleString()} €`} subValue="Recettes reçues" iconName="Banknote" colorClass="bg-teal-500" highlight={true}>
+                                        <div className="mt-6 pt-6 border-t border-slate-800/40 text-left">
+                                            <label className="text-[9px] font-black uppercase text-teal-500 tracking-widest block mb-2">Virement Mutuelle (€) :</label>
+                                            <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month.manualInami || ''} onBlur={(e) => saveInamiValue(e.target.value)} />
                                         </div>
                                     </StatCard>
-
-                                    <StatCard title="En Attente" value={`${stats.enAttente.toLocaleString()}€`} subValue="Reste à percevoir sur ce mois" iconName="Clock" colorClass="bg-orange-500" />
+                                    <StatCard isDarkMode={isDarkMode} title="Reste en Attente" value={`${stats.month.enAttente.toLocaleString()} €`} subValue="Impayés de ce mois" iconName="Clock" colorClass="bg-orange-500" />
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {[
-                                        { t: "Répartition Services", d: stats.catData, c: COLORS_DARK },
-                                        { t: "Lieu de consultation", d: stats.modData, c: ['#1e293b', '#2dd4bf'] },
-                                        { t: "Flux de Trésorerie", d: stats.payData, c: ['#0d9488', '#818cf8'] }
-                                    ].map((chart, i) => (
-                                        <div key={i} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl h-[340px] flex flex-col">
-                                            <h3 className="text-[9px] font-black uppercase opacity-50 mb-6 tracking-widest">{chart.t}</h3>
-                                            <div className="flex-1">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <PieChart>
-                                                        <Pie data={chart.d.filter(d=>d.value>0)} innerRadius={55} outerRadius={75} dataKey="value" stroke="none" paddingAngle={5}>
-                                                            {chart.d.map((_, j) => <Cell key={j} fill={chart.c[j % chart.c.length]} />)}
-                                                        </Pie>
-                                                        <Tooltip contentStyle={{backgroundColor:'#0f172a', border:'none', borderRadius:'10px', fontSize:'10px', color: '#fff'}} />
-                                                        <Legend verticalAlign="bottom" wrapperStyle={{fontSize:'9px', paddingTop:'20px'}} />
-                                                    </PieChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </div>
-                                    ))}
+                                {renderDistributionCharts(stats.month)}
+                            </div>
+                        )}
+
+                        {activeTab === 'dash_year' && (
+                            <div className="space-y-12 page-transition">
+                                <header className="flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()-1, 0, 1))} className={`p-3 rounded-xl border-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronLeft" /></button>
+                                        <h2 className="text-3xl font-black uppercase tracking-tighter">Exercice {viewDate.getFullYear()}</h2>
+                                        <button onClick={() => setViewDate(new Date(viewDate.getFullYear()+1, 0, 1))} className={`p-3 rounded-xl border-2 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}><Icon name="ChevronRight" /></button>
+                                    </div>
+                                </header>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <StatCard isDarkMode={isDarkMode} title="Volume Annuel" value={`${stats.year.caActé.toLocaleString()} €`} subValue="Total cumulé sur 12 mois" iconName="BarChart" colorClass="bg-slate-400" />
+                                    <StatCard isDarkMode={isDarkMode} title="Encaissé Annuel" value={`${stats.year.enBanque.toLocaleString()} €`} subValue="Cumul des recettes réelles" iconName="Banknote" colorClass="bg-teal-500" highlight={true} />
+                                    <StatCard isDarkMode={isDarkMode} title="Total Impayés" value={`${stats.year.enAttente.toLocaleString()} €`} subValue="Dettes cumulées sur l'année" iconName="AlertCircle" colorClass="bg-orange-500" />
                                 </div>
+
+                                <div className={`p-8 rounded-[2.5rem] border-2 h-[500px] flex flex-col shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                    <h3 className="text-[11px] font-black uppercase text-slate-400 mb-10 tracking-[0.25em] text-center border-b border-slate-800/20 pb-4">Évolution Mensuelle par Cabinet (€)</h3>
+                                    <div className="flex-1">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.comparisonData}>
+                                                <CartesianGrid vertical={false} stroke={isDarkMode ? '#1e293b' : '#f1f5f9'} strokeDasharray="3 3" />
+                                                <XAxis dataKey="name" axisLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
+                                                <YAxis axisLine={false} tick={{fill: '#94a3b8', fontSize: 10}} />
+                                                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#fff' }} cursor={{fill: isDarkMode ? '#1e293b' : '#f8fafc'}} />
+                                                <Legend verticalAlign="top" align="right" wrapperStyle={{paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold'}} />
+                                                {cabinets.map((cab, i) => <Bar key={cab} dataKey={cab} fill={CHART_COLORS[i % CHART_COLORS.length]} radius={[4, 4, 0, 0]} barSize={20} />)}
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                <h3 className="text-xl font-black uppercase tracking-tight text-center pt-8 border-t border-slate-800/40">Répartition Annuelle Globalisée</h3>
+                                {renderDistributionCharts(stats.year)}
                             </div>
                         )}
 
                         {activeTab === 'add' && (
-                            <div className="max-w-lg mx-auto page-transition pb-20">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-black uppercase tracking-tighter">Nouvelle Saisie</h2>
-                                    <button onClick={() => setActiveTab('dash_month')} className="p-2 text-slate-500"><Icon name="X" /></button>
-                                </div>
-                                <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-8 rounded-psy space-y-6 shadow-2xl">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 font-black text-xs outline-none focus:border-teal-500" /></div>
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Patient</label><input type="text" placeholder="Nom..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 font-black text-xs outline-none focus:border-teal-500" /></div>
+                            <div className="max-w-xl mx-auto page-transition pt-10 pb-20">
+                                <header className="flex justify-between items-center mb-10 px-4">
+                                    <h2 className={`text-3xl font-black uppercase tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Nouvelle Séance</h2>
+                                    <button onClick={() => setActiveTab('dash_month')} className="p-2 text-slate-500 hover:text-white transition-all"><Icon name="X" size={28} /></button>
+                                </header>
+                                <form onSubmit={handleSubmit} className={`p-10 rounded-[2.5rem] border-2 space-y-10 shadow-2xl ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                    <div className="grid grid-cols-2 gap-8">
+                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Date</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
+                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Patient</label><input type="text" placeholder="..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-3.5 rounded-2xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950' : 'border-slate-800 text-slate-500'}`}>{c}</button>)}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-4 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>{c}</button>)}
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 font-black text-xs outline-none">{['Virement bancaire', 'Espèces', 'INAMI'].map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                                        <div className="space-y-1"><label className="text-[9px] font-black uppercase opacity-40">Service</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-4 rounded-2xl bg-slate-950 border border-slate-800 font-black text-xs outline-none">{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Modalité & Statut</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Présentiel'})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Présentiel' ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Présentiel</button>
+                                            <button type="button" onClick={() => setFormData({...formData, modality: 'Visio'})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.modality === 'Visio' ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Visio</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 mt-2">
+                                            <button type="button" onClick={() => setFormData({...formData, isPaid: true})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.isPaid ? 'bg-teal-500 border-teal-500 text-slate-950' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>Déjà Payé</button>
+                                            <button type="button" onClick={() => setFormData({...formData, isPaid: false})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${!formData.isPaid ? 'bg-red-500 border-red-500 text-white shadow-lg' : (isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400')}`}>À Encaisser</button>
+                                        </div>
                                     </div>
-                                    <div className="relative pt-4"><span className="absolute left-6 bottom-10 font-black text-teal-600 text-3xl opacity-40">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full py-12 rounded-3xl bg-slate-950 border-2 border-slate-800 text-5xl font-black text-center outline-none focus:border-teal-500 transition-all" /></div>
-                                    <button type="submit" className="w-full py-6 rounded-3xl bg-teal-500 text-slate-950 font-black uppercase tracking-widest shadow-xl">Enregistrer</button>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none appearance-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`}>{PAYMENT_METHODS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                                        <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Service</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none appearance-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`}>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                    </div>
+                                    <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">Notes / Observations</label><textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="..." className={`w-full p-4 rounded-xl border-2 font-bold text-sm outline-none h-32 resize-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-slate-100 text-slate-900 focus:border-teal-500'}`}></textarea></div>
+                                    <div className="relative pt-10 border-t-2 border-slate-800/40 text-center"><span className="absolute left-6 bottom-14 font-black text-teal-600 text-4xl opacity-40 italic">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-14 rounded-3xl border-2 text-6xl font-black text-center outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`} /></div>
+                                    <button type="submit" className="w-full py-6 rounded-2xl bg-teal-500 text-slate-950 font-black uppercase tracking-[0.4em] text-sm shadow-2xl active:scale-95 transition-all">Enregistrer</button>
                                 </form>
                             </div>
                         )}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-8 page-transition pb-20">
-                                <h2 className="text-2xl font-black uppercase tracking-tighter">Journal Hebdomadaire</h2>
+                            <div className="space-y-12 page-transition pb-24">
+                                <header className="flex justify-between items-center px-4 border-b-4 border-slate-800/40 pb-8">
+                                    <h2 className={`text-3xl font-black uppercase tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Journal de {monthTitle}</h2>
+                                    <div className="px-5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-2xl text-[10px] font-black text-teal-400 uppercase tracking-widest">{stats.month.caActé.toLocaleString()} €</div>
+                                </header>
                                 {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
-                                    <div key={wName} className="space-y-4">
-                                        <div className="flex justify-between border-b border-teal-500/20 pb-2 px-2"><h3 className="text-xs font-black uppercase text-teal-500 font-bold">{wName}</h3><p className="text-[10px] font-black opacity-30">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()}€</p></div>
-                                        <div className="space-y-3">
+                                    <div key={wName} className="space-y-8">
+                                        <div className="flex justify-between items-center px-6 border-l-8 border-teal-500 bg-slate-900/60 py-4 rounded-r-2xl"><h3 className="text-md font-black uppercase tracking-[0.2em]">{wName}</h3><p className="text-sm font-black text-teal-400">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</p></div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             {wSessions.map(s => (
-                                                <div key={s.id} className="p-5 rounded-2xl border border-slate-800 bg-slate-900 flex flex-col gap-3 shadow-xl transition-all">
+                                                <div key={s.id} className={`p-8 rounded-[2rem] border-2 flex flex-col gap-6 shadow-xl transition-all group ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-600' : 'bg-white border-slate-200 hover:border-teal-500'}`}>
                                                     <div className="flex justify-between items-start">
-                                                        <div><p className="text-sm font-black uppercase">{s.clientName || 'Anonyme'}</p><p className="text-[9px] font-bold text-slate-500 uppercase">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
-                                                        <div className="text-right"><p className="text-xl font-black">{s.amount}€</p><button onClick={()=>togglePaid(s)} className={`text-[7px] font-black uppercase px-2 py-1 rounded-full border transition-all ${s.isPaid?'bg-teal-500/10 text-teal-500 border-teal-500/20':'bg-red-600 text-white border-red-600'}`}>{s.isPaid?'Payé':'À payer'}</button></div>
+                                                        <div className="flex gap-5">
+                                                            <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner group-hover:scale-110 transition-transform"><Icon name={s.modality === 'Visio' ? 'Video' : (s.paymentMethod==='INAMI'?'Building2':'User')} size={26} /></div>
+                                                            <div className="space-y-2"><p className="text-lg font-black uppercase tracking-tight text-white leading-none">{s.clientName || 'Anonyme'}</p><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className={`text-2xl font-black mb-3 tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{parseFloat(s.amount).toLocaleString()}€</p>
+                                                            <button onClick={()=>togglePaid(s)} className={`text-[9px] font-black uppercase px-4 py-2 rounded-xl border-2 transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 'bg-red-500 text-white border-red-600 shadow-lg'}`}>{s.isPaid ? 'ENCAISSÉ' : 'À PAYER'}</button>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex justify-between items-center pt-2 border-t border-slate-800/40">
-                                                        <p className="text-[8px] font-black uppercase text-slate-500">{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}</p>
-                                                        <button onClick={()=>deleteSession(s.id)} className="text-slate-600 hover:text-red-500 p-2"><Icon name="Trash2" size={14}/></button>
+                                                    {s.notes && <div className={`p-4 rounded-xl text-[11px] font-medium leading-relaxed italic ${isDarkMode ? 'bg-slate-950/50 text-slate-400 border-l-4 border-slate-700' : 'bg-slate-50 text-slate-500 border-l-4 border-slate-200'}`}>{s.notes}</div>}
+                                                    <div className="flex justify-between items-center pt-5 border-t border-slate-800/40">
+                                                        <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'long'})}</p>
+                                                        <button onClick={()=>deleteDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions', s.id))} className="text-slate-600 hover:text-red-500 p-3 rounded-2xl transition-all"><Icon name="Trash2" size={18}/></button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -317,10 +462,38 @@
                                 ))}
                             </div>
                         )}
+
+                        {activeTab === 'settings' && (
+                            <div className="max-w-xl mx-auto space-y-10 page-transition pt-10 pb-24">
+                                <h2 className={`text-3xl font-black uppercase tracking-tighter text-center ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Réglages</h2>
+                                <div className={`p-10 rounded-[3rem] border-2 shadow-2xl space-y-12 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                    <div className="space-y-8">
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500 border-b-2 border-slate-800/40 pb-4">Apparence</h3>
+                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Mode Sombre</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateRemoteSettings({isDarkMode: !isDarkMode});}} className={`w-12 h-6 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
+                                        <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateRemoteSettings({zoomLevel})} className="w-full" /></div>
+                                    </div>
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Cabinets</h3><button onClick={()=>{const n=[...cabinets, 'Nouveau']; setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
+                                        <div className="space-y-3">{cabinets.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...cabinets]; n[i]=e.target.value; setCabinets(n);}} onBlur={()=>updateRemoteSettings({cabinets})} className={`flex-1 p-4 rounded-xl border-2 text-[11px] font-black uppercase outline-none focus:border-teal-500 transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white':'bg-slate-100 border-slate-200 text-slate-900'}`} /><button onClick={()=>{const n=cabinets.filter((_,idx)=>idx!==i); setCabinets(n); updateRemoteSettings({cabinets:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
+                                    </div>
+                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800/40">
+                                        <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-widest text-teal-500">Services</h3><button onClick={()=>{const n=[...categories, 'Nouveau']; setCategories(n); updateRemoteSettings({categories:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
+                                        <div className="space-y-3">{categories.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...categories]; n[i]=e.target.value; setCategories(n);}} onBlur={()=>updateRemoteSettings({categories})} className={`flex-1 p-4 rounded-xl border-2 text-[11px] font-black uppercase outline-none focus:border-teal-500 transition-all ${isDarkMode?'bg-slate-950 border-slate-800 text-white':'bg-slate-100 border-slate-200 text-slate-900'}`} /><button onClick={()=>{const n=categories.filter((_,idx)=>idx!==i); setCategories(n); updateRemoteSettings({categories:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl transition-all"><Icon name="X" size={18}/></button></div>))}</div>
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 text-center font-black uppercase tracking-[0.4em] pt-8">AK MINDSTEP consult tracker v9.0</p>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
-                    <nav className="md:hidden fixed bottom-0 left-0 right-0 h-24 border-t border-slate-800 bg-slate-950/95 backdrop-blur-xl flex items-center justify-around px-4 z-50">
-                        {NAV_TABS.map(t => <button key={t.id} onClick={() => setActiveTab(t.id)} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === t.id ? 'text-teal-500 font-black' : 'text-slate-500 opacity-60'}`}><div className={`p-2 rounded-2xl ${activeTab === t.id ? 'bg-teal-500/10' : ''}`}><Icon name={t.icon} size={22} /></div><span className="text-[7px] font-black uppercase tracking-widest">{t.label}</span></button>)}
+                    {/* Mobile Navigation */}
+                    <nav className={`md:hidden fixed bottom-0 left-0 right-0 h-24 border-t-4 backdrop-blur-3xl flex items-center justify-around px-8 z-50 shadow-[0_-20px_50px_rgba(0,0,0,0.6)] ${isDarkMode ? 'bg-slate-950/98 border-slate-800' : 'bg-white/95 border-slate-200 shadow-slate-200'}`}>
+                        {NAV_TABS.map(t => (
+                            <button key={t.id} onClick={() => setActiveTab(t.id)} className={`flex flex-col items-center gap-2.5 transition-all ${activeTab === t.id ? 'text-teal-400 scale-110 font-black' : 'text-slate-600 opacity-60'}`}>
+                                <div className={`p-3 rounded-[1.2rem] transition-all ${activeTab === t.id ? 'bg-teal-500/10' : ''}`}><Icon name={t.icon} size={26} /></div>
+                                <span className="text-[8px] font-black uppercase tracking-[0.1em]">{t.label}</span>
+                            </button>
+                        ))}
                     </nav>
                 </div>
             );
