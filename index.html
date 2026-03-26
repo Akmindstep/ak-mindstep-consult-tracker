@@ -19,52 +19,41 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         
-        :root { --accent: #2dd4bf; }
-        
         body { 
             font-family: 'Plus Jakarta Sans', sans-serif; 
             background-color: #020617; 
             color: #f8fafc;
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
+            scroll-behavior: smooth;
         }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        .glass-card {
-            background: rgba(15, 23, 42, 0.7);
-            border: 1px solid rgba(51, 65, 85, 0.4);
-            backdrop-filter: blur(12px);
-            border-radius: 1.5rem;
+        .card-premium {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
         }
 
         .animate-progress { animation: progress 2s ease-in-out infinite; }
         @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
         
         .page-transition { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        input[type="date"]::-webkit-calendar-picker-indicator { 
-            filter: invert(1); 
-            opacity: 0.5; 
-            cursor: pointer; 
-        }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; cursor: pointer; }
 
-        /* Tooltip & Charts Fixes */
+        /* Tooltip Recharts */
         .recharts-default-tooltip {
-            background-color: #0f172a !important;
+            background-color: #020617 !important;
             border: 1px solid #334155 !important;
             border-radius: 0.75rem !important;
             padding: 12px !important;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
         }
-        .recharts-tooltip-item { color: #ffffff !important; font-size: 11px !important; font-weight: 700 !important; }
+        .recharts-tooltip-item { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; }
         .recharts-tooltip-label { color: #94a3b8 !important; margin-bottom: 4px !important; font-size: 10px !important; font-weight: 800; text-transform: uppercase; }
-
-        /* Elegant Range */
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #1e293b; border-radius: 2px; }
-        input[type=range]::-webkit-slider-thumb { height: 18px; width: 18px; border-radius: 50%; background: #2dd4bf; cursor: pointer; -webkit-appearance: none; margin-top: -7px; }
     </style>
 </head>
 <body>
@@ -127,7 +116,7 @@
                     </div>
                 </div>
                 <div className={`text-2xl font-black tracking-tight mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{value}</div>
-                {subValue && <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wide leading-tight">{subValue}</div>}
+                {subValue && <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wide">{subValue}</div>}
                 {children}
             </div>
         );
@@ -160,6 +149,19 @@
 
             const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = window.Recharts || {};
 
+            // --- AUTO SCROLL MANAGEMENT ---
+            React.useEffect(() => {
+                if (activeTab === 'dash_month' || activeTab === 'dash_year' || activeTab === 'settings') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else if (activeTab === 'history') {
+                    // Délai court pour laisser le temps au DOM de charger la liste
+                    setTimeout(() => {
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                    }, 100);
+                }
+            }, [activeTab]);
+
+            // --- SYNC FIREBASE ---
             React.useEffect(() => {
                 const check = setInterval(() => { if (window.lucide && window.Recharts?.ResponsiveContainer) { setLibsReady(true); clearInterval(check); } }, 500);
                 const unsubAuth = onAuthStateChanged(auth, (u) => { if (u) setUser(u); else signInAnonymously(auth); });
@@ -189,27 +191,30 @@
                 return () => { unsubSessions(); unsubInami(); unsubSettings(); };
             }, [user]);
 
+            // --- CALCULS STATISTIQUES ---
             const stats = React.useMemo(() => {
                 const selYear = viewDate.getFullYear();
                 
                 // --- MOIS ---
                 const monthSessions = sessions.filter(s => s.date.startsWith(monthKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
-                const manualMois = inamiReceipts[monthKey] || 0;
-                const caMois = monthSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const bankMois = monthSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) + manualMois;
+                const manualMoisValue = inamiReceipts[monthKey] || 0;
+                
+                const caActéMois = monthSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const bankMois = monthSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) + manualMoisValue;
                 const inamiWaitMois = monthSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const otherWaitMois = monthSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                // CORRECTION : Impayés Divers = Tout ce qui n'est pas INAMI et qui n'est pas payé
+                const impayesDiversMois = monthSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
 
                 // --- ANNÉE ---
                 const yearSessions = sessions.filter(s => s.date.startsWith(yearKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
-                const caYearTotal = yearSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const inamiWaitYearTotal = yearSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const otherWaitYearTotal = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const yearCaTotal = yearSessions.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 
-                let manualYearTotal = 0;
-                Object.keys(inamiReceipts).forEach(k => { if(k.startsWith(yearKey)) manualYearTotal += inamiReceipts[k]; });
-                const paidImmediateYear = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
-                const bankYearTotal = paidImmediateYear + manualYearTotal;
+                let yearInamiManualTotal = 0;
+                Object.keys(inamiReceipts).forEach(k => { if(k.startsWith(yearKey)) yearInamiManualTotal += inamiReceipts[k]; });
+                
+                const yearBankTotal = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) + yearInamiManualTotal;
+                const yearInamiWaitTotal = yearSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                const yearImpayesDiversTotal = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
 
                 const comparisonData = Array.from({ length: 12 }, (_, i) => {
                     const m = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
@@ -220,19 +225,19 @@
                     return entry;
                 });
 
-                const buildPie = (arr) => ({
+                const buildPieData = (arr) => ({
                     cat: (categories || []).map(c => ({ name: c, value: arr.filter(s => s.category === c).length })),
                     mod: [{ name: 'Présentiel', value: arr.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: arr.filter(s => s.modality === 'Visio').length }],
                     pay: [
-                        { name: 'INAMI (Volume)', value: arr.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                        { name: 'INAMI Acté', value: arr.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
                         { name: 'Espèces', value: arr.filter(s => s.paymentMethod === 'Espèces').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
                         { name: 'Bancaire', value: arr.filter(s => s.paymentMethod === 'Virement bancaire').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) }
                     ]
                 });
 
                 return {
-                    month: { ca: caMois, bank: bankMois, inamiWait: inamiWaitMois, otherWait: otherWaitMois, manual: manualMois, count: monthSessions.length, ...buildPie(monthSessions) },
-                    year: { ca: caYearTotal, bank: bankYearTotal, inamiWait: inamiWaitYearTotal, otherWait: otherWaitYearTotal, count: yearSessions.length, ...buildPie(yearSessions) },
+                    month: { ca: caActéMois, bank: bankMois, inamiWait: inamiWaitMois, otherWait: impayesDiversMois, manual: manualMoisValue, count: monthSessions.length, ...buildPieData(monthSessions) },
+                    year: { ca: yearCaTotal, bank: yearBankTotal, inamiWait: yearInamiWaitTotal, otherWait: yearImpayesDiversTotal, count: yearSessions.length, ...buildPieData(yearSessions) },
                     comparisonData
                 };
             }, [sessions, monthKey, yearKey, inamiReceipts, cabinets, categories, filterCabinet, viewDate]);
@@ -252,22 +257,34 @@
 
             // --- ACTIONS ---
             const startEdit = (s) => {
-                setFormData({ ...s, amount: s.amount.toString() });
+                setFormData({ 
+                    ...s, 
+                    amount: s.amount.toString(),
+                    cabinet: s.cabinet || (cabinets[0] || ''),
+                    category: s.category || (categories[0] || '')
+                });
                 setEditingId(s.id);
                 setActiveTab('add');
             };
 
             const handleSave = async (e) => {
                 e.preventDefault();
-                const payload = { ...formData, cabinet: formData.cabinet || cabinets[0], category: formData.category || categories[0], amount: parseFloat(formData.amount), updatedAt: new Date().toISOString() };
+                const payload = { 
+                    ...formData, 
+                    cabinet: formData.cabinet || cabinets[0], 
+                    category: formData.category || categories[0], 
+                    amount: parseFloat(formData.amount), 
+                    updatedAt: new Date().toISOString() 
+                };
                 if (editingId) await updateDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions', editingId), payload);
                 else await addDoc(collection(db, 'artifacts', appIdGlobal, 'public', 'data', 'sessions'), { ...payload, createdAt: new Date().toISOString() });
                 
                 setFormData({ amount: '', clientName: '', notes: '', isCancellation: false, date: new Date().toISOString().split('T')[0], modality: 'Présentiel', isPaid: true, cabinet: '', category: '', paymentMethod: 'Virement bancaire' });
-                setEditingId(null); setActiveTab('history');
+                setEditingId(null); 
+                setActiveTab('history');
             };
 
-            const saveInami = async (v) => { await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_manual', monthKey), { amount: parseFloat(v) || 0 }); };
+            const saveInamiVal = async (v) => { await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_manual', monthKey), { amount: parseFloat(v) || 0 }); };
             const updateSettings = async (n) => await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), n, { merge: true });
 
             const renderDonut = (title, data, colors, isAmount = false) => {
@@ -275,7 +292,7 @@
                 const displayTotal = isAmount ? `${Math.round(totalValue).toLocaleString()}€` : totalValue;
                 return (
                     <div className={`p-8 rounded-3xl border flex flex-col items-center relative overflow-hidden ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
-                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-6 tracking-widest text-center z-10">{title}</h3>
+                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-6 tracking-widest text-center">{title}</h3>
                         <div className="relative w-full h-[240px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -287,7 +304,7 @@
                             </ResponsiveContainer>
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                                 <span className={`text-xl font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>{displayTotal}</span>
-                                <span className="text-[8px] font-bold uppercase text-slate-500 opacity-50 tracking-widest">Total</span>
+                                <span className="text-[8px] font-bold uppercase text-slate-500 opacity-50 tracking-widest text-center">Total</span>
                             </div>
                         </div>
                         <div className="w-full mt-6 grid grid-cols-2 gap-y-2">
@@ -302,23 +319,23 @@
                 );
             };
 
-            if (loading || !libsReady) return <div className="h-screen flex items-center justify-center bg-slate-950 text-center"><div className="w-20 h-1 bg-slate-800 rounded-full overflow-hidden mb-6"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div></div>;
+            if (loading || !libsReady) return <div className="h-screen flex items-center justify-center bg-slate-950"><div className="w-20 h-1 bg-slate-800 rounded-full overflow-hidden"><div className="w-full h-full bg-teal-500 animate-progress origin-left"></div></div></div>;
 
             return (
                 <div className={`min-h-screen pb-32 transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`} style={{ zoom: zoomLevel / 100 }}>
                     
                     <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/90 border-slate-900' : 'bg-white/90 border-slate-200'}`}>
                         <div className="flex items-center gap-4 shrink-0">
-                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg"><Icon name="Activity" size={18}/></div>
+                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg shadow-teal-500/20"><Icon name="Activity" size={18}/></div>
                             <h1 className={`font-black text-lg uppercase tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>AK MINDSTEP <span className="font-medium opacity-50 ml-1 text-xs">| consult tracker</span></h1>
                         </div>
                         <nav className="flex items-center gap-2 h-full">
                             {NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingId(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === t.id ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-500 hover:text-white'}`}>{t.label}</button>)}
                         </nav>
-                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900 hover:border-teal-500' : 'border-slate-200 bg-white shadow-sm'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18}/></button>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18}/></button>
                     </header>
 
-                    <button onClick={() => {setActiveTab('add'); setEditingId(null);}} className={`fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${isDarkMode ? 'bg-teal-500 shadow-teal-500/20' : 'bg-slate-900 shadow-black/30'}`}><Icon name="Plus" size={32} /></button>
+                    <button onClick={() => {setActiveTab('add'); setEditingId(null);}} className={`fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${isDarkMode ? 'bg-teal-500' : 'bg-slate-900'}`}><Icon name="Plus" size={32} /></button>
 
                     <main className="p-4 md:p-12 max-w-7xl mx-auto space-y-12">
                         {activeTab === 'dash_month' && (
@@ -329,9 +346,9 @@
                                         <h2 className="text-3xl font-black uppercase tracking-tighter">{monthTitleLabel}</h2>
                                         <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-3 rounded-xl border border-slate-800 hover:border-teal-500 transition-colors"><Icon name="ChevronRight" /></button>
                                     </div>
-                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                                        <button onClick={() => setFilterCabinet('Tous')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === 'Tous' ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>Tous</button>
-                                        {cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
+                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
+                                        <button onClick={() => setFilterCabinet('Tous')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${filterCabinet === 'Tous' ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>Tous</button>
+                                        {cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
                                     </div>
                                 </header>
 
@@ -340,11 +357,11 @@
                                     <StatCard isDarkMode={isDarkMode} title="Solde en Banque" value={`${(stats.month?.bank || 0).toLocaleString()} €`} iconName="Banknote" colorClass="bg-teal-500" highlight={true}>
                                         <div className="mt-4 pt-4 border-t border-slate-800/40 text-left">
                                             <label className="text-[9px] font-black uppercase text-teal-500 tracking-widest block mb-2">virement de l'inami (€) :</label>
-                                            <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month?.manual || ''} onBlur={(e) => saveInami(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (saveInami(e.target.value), e.target.blur())} />
+                                            <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month?.manual || ''} onBlur={(e) => saveInamiVal(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (saveInamiVal(e.target.value), e.target.blur())} />
                                         </div>
                                     </StatCard>
                                     <StatCard isDarkMode={isDarkMode} title="INAMI à venir" value={`${(stats.month?.inamiWait || 0).toLocaleString()} €`} iconName="Stethoscope" colorClass="bg-indigo-500" />
-                                    <StatCard isDarkMode={isDarkMode} title="Impayés Divers" value={`${(stats.month?.impayesDivers || 0).toLocaleString()} €`} iconName="Clock" colorClass="bg-red-500" />
+                                    <StatCard isDarkMode={isDarkMode} title="Impayés Divers" value={`${(stats.month?.otherWait || 0).toLocaleString()} €`} iconName="Clock" colorClass="bg-red-500" />
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -397,7 +414,7 @@
                                         <div className="space-y-3"><label className="text-[10px] font-black uppercase text-slate-500 ml-1 tracking-widest">Patient</label><input type="text" placeholder="..." value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={`w-full p-4 rounded-xl border font-bold text-sm outline-none focus:border-teal-500 transition-all ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50'}`} /></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
-                                        {cabinets.map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : 'border-slate-800 text-slate-500'}`}>{c}</button>)}
+                                        {(cabinets || []).map(c => <button key={c} type="button" onClick={() => setFormData({...formData, cabinet: c})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.cabinet === c ? 'bg-teal-500 border-teal-500 text-slate-950 shadow-lg' : 'border-slate-800 text-slate-500'}`}>{c}</button>)}
                                     </div>
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
@@ -422,7 +439,7 @@
 
                         {activeTab === 'history' && (
                             <div className="space-y-12 page-transition pb-24">
-                                <header className="flex justify-between items-center px-4 border-b-2 border-slate-800/40 pb-6"><h2 className="text-3xl font-black uppercase tracking-tighter">Journal de {monthTitleLabel}</h2><div className="px-5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-2xl text-[10px] font-black text-teal-400 uppercase">{(stats.month?.ca || 0).toLocaleString()} €</div></header>
+                                <header className="flex justify-between items-center px-4 border-b-2 border-slate-800/40 pb-6"><h2 className="text-3xl font-black uppercase tracking-tighter">Journal Hebdomadaire</h2><div className="px-5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-2xl text-[10px] font-black text-teal-400 uppercase">{(stats.month?.ca || 0).toLocaleString()} €</div></header>
                                 {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
                                     <div key={wName} className="space-y-8">
                                         <div className="flex justify-between items-center px-6 border-l-8 border-teal-500 bg-slate-900/60 py-4 rounded-r-2xl"><h3 className="text-md font-black uppercase tracking-[0.2em]">{wName}</h3><p className="text-sm font-black text-teal-400">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</p></div>
@@ -458,8 +475,8 @@
                                 <div className={`p-10 rounded-[3rem] border-2 shadow-2xl space-y-12 bg-slate-900 border-slate-800`}>
                                     <div className="space-y-8">
                                         <h3 className="text-[10px] font-black uppercase text-teal-500 border-b-2 border-slate-800 pb-4">Apparence</h3>
-                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Mode Sombre Force</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode});}} className={`w-14 h-8 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
-                                        <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateSettings({zoomLevel})} className="w-full" /></div>
+                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase text-slate-400">Mode Sombre Force</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode});}} className={`w-14 h-8 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
+                                        <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateSettings({zoomLevel})} className="w-full" /></div>
                                     </div>
                                     <div className="space-y-6 pt-4 border-t-2 border-slate-800">
                                         <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase text-teal-500">Cabinets</h3><button onClick={()=>{const n=[...cabinets, 'Nouveau']; setCabinets(n); updateSettings({cabinets:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
