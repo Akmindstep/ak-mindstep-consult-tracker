@@ -51,7 +51,7 @@
             cursor: pointer; 
         }
 
-        /* Tooltip Recharts Fix */
+        /* Tooltip & Chart Styles */
         .recharts-default-tooltip {
             background-color: #020617 !important;
             border: 1px solid #334155 !important;
@@ -154,21 +154,12 @@
                 paymentMethod: 'Virement bancaire', isPaid: true, isCancellation: false, clientName: '', notes: ''
             });
 
-            // --- VARIABLES DÉRIVÉES ---
+            // --- VARIABLES DE RENDU ---
             const monthKey = `${viewDate.getFullYear()}-${(viewDate.getMonth() + 1).toString().padStart(2, '0')}`;
             const yearKey = viewDate.getFullYear().toString();
             const monthTitleLabel = new Intl.DateTimeFormat('fr-FR', {month:'long', year:'numeric'}).format(viewDate);
 
             const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } = window.Recharts || {};
-
-            // --- AUTO SCROLL MANAGEMENT ---
-            React.useEffect(() => {
-                if (activeTab === 'dash_month' || activeTab === 'dash_year' || activeTab === 'settings') {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                } else if (activeTab === 'history') {
-                    setTimeout(() => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }, 200);
-                }
-            }, [activeTab]);
 
             // --- SYNC FIREBASE ---
             React.useEffect(() => {
@@ -203,7 +194,7 @@
             // --- CALCULS STATISTIQUES ---
             const stats = React.useMemo(() => {
                 const selYear = viewDate.getFullYear();
-                const sortByRecent = (arr) => [...arr].sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+                const sortByEncoding = (arr) => [...arr].sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
 
                 // --- MOIS ---
                 const monthSessions = sessions.filter(s => s.date.startsWith(monthKey) && (filterCabinet === 'Tous' || s.cabinet === filterCabinet));
@@ -213,8 +204,8 @@
                 const paidImmediateMois = monthSessions.filter(s => s.paymentMethod !== 'INAMI' && s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const bankMois = paidImmediateMois + manualMoisValue;
                 
-                const listInamiWait = sortByRecent(monthSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid));
-                const listOtherWait = sortByRecent(monthSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid));
+                const listInamiWait = sortByEncoding(monthSessions.filter(s => s.paymentMethod === 'INAMI' && !s.isPaid));
+                const listOtherWait = sortByEncoding(monthSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid));
                 
                 const inamiWaitMois = listInamiWait.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                 const otherWaitMois = listOtherWait.reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
@@ -232,10 +223,13 @@
                 const yearOtherWaitTotal = yearSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
 
                 const comparisonData = Array.from({ length: 12 }, (_, i) => {
-                    const m = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
-                    const entry = { name: m };
+                    const mLabel = new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(selYear, i));
+                    const entry = { name: mLabel };
                     (cabinets || []).forEach(cab => {
-                        entry[cab] = sessions.filter(s => s.date.startsWith(`${selYear}-${(i+1).toString().padStart(2,'0')}`) && s.cabinet === cab).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
+                        entry[cab] = sessions.filter(s => {
+                            const d = new Date(s.date);
+                            return d.getMonth() === i && d.getFullYear() === selYear && s.cabinet === cab;
+                        }).reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0);
                     });
                     return entry;
                 });
@@ -244,7 +238,7 @@
                     cat: (categories || []).map(c => ({ name: c, value: arr.filter(s => s.category === c).length })),
                     mod: [{ name: 'Présentiel', value: arr.filter(s => s.modality === 'Présentiel').length }, { name: 'Visio', value: arr.filter(s => s.modality === 'Visio').length }],
                     pay: [
-                        { name: 'INAMI (Volume)', value: arr.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
+                        { name: 'INAMI', value: arr.filter(s => s.paymentMethod === 'INAMI').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
                         { name: 'Espèces', value: arr.filter(s => s.paymentMethod === 'Espèces').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) },
                         { name: 'Bancaire', value: arr.filter(s => s.paymentMethod === 'Virement bancaire').reduce((acc, s) => acc + (parseFloat(s.amount) || 0), 0) }
                     ]
@@ -252,14 +246,17 @@
 
                 return {
                     month: { ca: caActéMois, bank: bankMois, inamiWait: inamiWaitMois, otherWait: otherWaitMois, manual: manualMoisValue, count: monthSessions.length, listInami: listInamiWait, listOther: listOtherWait, ...buildPieData(monthSessions) },
-                    year: { ca: caYearTotal, bank: yearBankTotal, inamiWait: yearInamiWaitTotal, otherWait: yearOtherWaitTotal, count: yearSessions.length, listOther: sortByRecent(yearSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid)), ...buildPieData(yearSessions) },
+                    year: { ca: caYearTotal, bank: yearBankTotal, inamiWait: yearInamiWaitTotal, otherWait: yearOtherWaitTotal, count: yearSessions.length, listOther: sortByEncoding(yearSessions.filter(s => s.paymentMethod !== 'INAMI' && !s.isPaid)), ...buildPieData(yearSessions) },
                     comparisonData
                 };
             }, [sessions, monthKey, yearKey, inamiReceipts, cabinets, categories, filterCabinet, viewDate]);
 
             const groupedWeeks = React.useMemo(() => {
                 const res = { "Semaine 1": [], "Semaine 2": [], "Semaine 3": [], "Semaine 4": [], "Semaine 5": [] };
-                sessions.filter(s => s.date.startsWith(monthKey)).sort((a,b) => a.date.localeCompare(b.date)).forEach(s => {
+                // Tri CHRONOLOGIQUE : premiers jours en haut, derniers en bas
+                const sortedSessions = [...sessions].filter(s => s.date.startsWith(monthKey)).sort((a,b) => a.date.localeCompare(b.date));
+                
+                sortedSessions.forEach(s => {
                     const day = parseInt(s.date.split('-')[2]);
                     if (day <= 7) res["Semaine 1"].push(s);
                     else if (day <= 14) res["Semaine 2"].push(s);
@@ -270,8 +267,17 @@
                 return res;
             }, [sessions, monthKey]);
 
+            // --- AUTO SCROLL ---
+            React.useEffect(() => {
+                if (activeTab === 'dash_month' || activeTab === 'dash_year' || activeTab === 'settings') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else if (activeTab === 'history') {
+                    setTimeout(() => { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }, 200);
+                }
+            }, [activeTab]);
+
             // --- ACTIONS ---
-            const saveInami = async (v) => { 
+            const saveInamiVal = async (v) => { 
                 await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'inami_manual', monthKey), { amount: parseFloat(v) || 0 }); 
             };
 
@@ -279,8 +285,8 @@
                 e.preventDefault();
                 const payload = { 
                     ...formData, 
-                    cabinet: formData.cabinet || cabinets[0], 
-                    category: formData.category || categories[0], 
+                    cabinet: formData.cabinet || (cabinets[0] || ''), 
+                    category: formData.category || (categories[0] || ''), 
                     amount: parseFloat(formData.amount), 
                     updatedAt: new Date().toISOString() 
                 };
@@ -300,33 +306,51 @@
 
             const updateSettings = async (n) => await setDoc(doc(db, 'artifacts', appIdGlobal, 'public', 'data', 'settings', 'config'), n, { merge: true });
 
+            // --- RENDER DONUT WITH LABELS ---
             const renderDonut = (title, data, colors, isAmount = false) => {
                 const totalValue = (data || []).reduce((acc, curr) => acc + curr.value, 0);
                 const displayTotal = isAmount ? `${Math.round(totalValue).toLocaleString()}€` : totalValue;
+
+                // Custom Label Function
+                const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value, name }) => {
+                    const RADIAN = Math.PI / 180;
+                    const radius = outerRadius * 1.15;
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                    if (value === 0) return null;
+                    return (
+                        <text x={x} y={y} fill={isDarkMode ? "#94a3b8" : "#475569"} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-[8px] font-black uppercase">
+                            {`${name}: ${Math.round(value)}${isAmount ? '€' : ''}`}
+                        </text>
+                    );
+                };
+
                 return (
                     <div className={`p-8 rounded-3xl border flex flex-col items-center relative overflow-hidden ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
                         <h3 className="text-[10px] font-black uppercase text-slate-500 mb-6 tracking-widest text-center">{title}</h3>
-                        <div className="relative w-full h-[240px]">
+                        <div className="relative w-full h-[280px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={(data || []).filter(d=>d.value>0)} innerRadius={70} outerRadius={90} dataKey="value" stroke={isDarkMode ? "#020617" : "#fff"} strokeWidth={3} paddingAngle={6}>
+                                    <Pie 
+                                        data={(data || []).filter(d=>d.value>0)} 
+                                        innerRadius={65} 
+                                        outerRadius={85} 
+                                        dataKey="value" 
+                                        stroke={isDarkMode ? "#020617" : "#fff"} 
+                                        strokeWidth={3} 
+                                        paddingAngle={6}
+                                        label={renderCustomLabel}
+                                        labelLine={{ stroke: isDarkMode ? '#334155' : '#cbd5e1', strokeWidth: 1 }}
+                                    >
                                         {(data || []).map((_, j) => <Cell key={j} fill={colors[j % colors.length]} />)}
                                     </Pie>
                                     <Tooltip />
                                 </PieChart>
                             </ResponsiveContainer>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-4">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-4 pb-4">
                                 <span className={`text-xl font-black tracking-tighter ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>{displayTotal}</span>
                                 <span className="text-[8px] font-bold uppercase text-slate-500 opacity-50 tracking-widest">Total</span>
                             </div>
-                        </div>
-                        <div className="w-full mt-6 grid grid-cols-2 gap-y-2">
-                            {(data || []).filter(d=>d.value>0).map((e, i) => (
-                                <div key={i} className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: colors[i % colors.length]}}></div>
-                                    <span className="text-[9px] font-bold text-slate-500 uppercase truncate tracking-tighter">{e.name}</span>
-                                </div>
-                            ))}
                         </div>
                     </div>
                 );
@@ -357,13 +381,13 @@
                     
                     <header className={`hidden md:flex sticky top-0 z-50 px-10 h-20 items-center justify-between border-b backdrop-blur-xl ${isDarkMode ? 'bg-slate-950/90 border-slate-900' : 'bg-white/90 border-slate-200'}`}>
                         <div className="flex items-center gap-4 shrink-0">
-                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg"><Icon name="Activity" size={18}/></div>
+                            <div className="p-2 bg-teal-500 rounded-xl text-slate-950 shadow-lg shadow-teal-500/20"><Icon name="Activity" size={18}/></div>
                             <h1 className={`font-black text-lg uppercase tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>AK MINDSTEP <span className="font-medium opacity-50 ml-1 text-xs">| consult tracker</span></h1>
                         </div>
                         <nav className="flex items-center gap-4 h-full">
                             {NAV_TABS.map(t => <button key={t.id} onClick={() => {setActiveTab(t.id); setEditingId(null);}} className={`px-6 h-full text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t.id ? 'text-teal-400 border-b-2 border-teal-400' : 'text-slate-500 hover:text-white'}`}>{t.label}</button>)}
                         </nav>
-                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white shadow-sm'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={16}/></button>
+                        <button onClick={() => { setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode}); }} className={`p-2.5 border rounded-xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white shadow-sm'}`}><Icon name={isDarkMode ? 'Sun' : 'Moon'} size={18}/></button>
                     </header>
 
                     <button onClick={() => {setActiveTab('add'); setEditingId(null);}} className={`fixed z-[60] bottom-28 right-6 md:bottom-12 md:right-12 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all ${isDarkMode ? 'bg-teal-500' : 'bg-slate-900'}`}><Icon name="Plus" size={32} /></button>
@@ -372,14 +396,14 @@
                         {activeTab === 'dash_month' && (
                             <div className="space-y-10 page-transition">
                                 <header className="flex flex-col sm:flex-row justify-between items-center gap-6">
-                                    <div className="flex items-center gap-5">
+                                    <div className="flex items-center gap-5 text-white">
                                         <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className={`p-3 rounded-xl border border-slate-800 hover:border-teal-500 transition-colors`}><Icon name="ChevronLeft" /></button>
                                         <h2 className="text-3xl font-black uppercase tracking-tighter">{monthTitleLabel}</h2>
                                         <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className={`p-3 rounded-xl border border-slate-800 hover:border-teal-500 transition-colors`}><Icon name="ChevronRight" /></button>
                                     </div>
-                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                                    <div className={`flex gap-2 p-1.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
                                         <button onClick={() => setFilterCabinet('Tous')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${filterCabinet === 'Tous' ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>Tous</button>
-                                        {cabinets.map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
+                                        {(cabinets || []).map(c => <button key={c} onClick={() => setFilterCabinet(c)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${filterCabinet === c ? 'bg-teal-500 text-slate-950' : 'text-slate-500'}`}>{c}</button>)}
                                     </div>
                                 </header>
 
@@ -388,7 +412,7 @@
                                     <StatCard isDarkMode={isDarkMode} title="Solde en Banque" value={`${(stats.month?.bank || 0).toLocaleString()} €`} iconName="Banknote" colorClass="bg-teal-500" highlight={true}>
                                         <div className="mt-4 pt-4 border-t border-slate-800/40 text-left">
                                             <label className="text-[9px] font-black uppercase text-teal-500 tracking-widest block mb-1">virement de l'inami (€) :</label>
-                                            <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month?.manual || ''} onBlur={(e) => saveInami(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (saveInami(e.target.value), e.target.blur())} />
+                                            <input type="number" placeholder="0.00" className={`w-full p-4 rounded-xl text-lg font-black outline-none transition-all ${isDarkMode ? 'bg-slate-950 border-2 border-slate-800 text-white focus:border-teal-500' : 'bg-slate-50 border-2 border-slate-200 text-slate-900'}`} defaultValue={stats.month?.manual || ''} onBlur={(e) => saveInamiVal(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (saveInamiVal(e.target.value), e.target.blur())} />
                                             {stats.month?.manual > 0 && <p className="text-[7px] font-black text-teal-600 mt-1 uppercase tracking-tighter italic">Dernier virement : {stats.month.manual.toLocaleString()} €</p>}
                                         </div>
                                     </StatCard>
@@ -399,7 +423,7 @@
                                         {renderUnpaidMiniList(stats.month?.listOther || [])}
                                     </StatCard>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-slate-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                     {renderDonut("Répartition Services", stats.month?.cat, CHART_COLORS)}
                                     {renderDonut("Lieu de Consultation", stats.month?.mod, ['#1e293b', '#2dd4bf'])}
                                     {renderDonut("Répartition CA Acté", stats.month?.pay, ['#6366f1', '#fbbf24', '#2dd4bf'], true)}
@@ -409,7 +433,7 @@
 
                         {activeTab === 'dash_year' && (
                             <div className="space-y-12 page-transition">
-                                <header className="flex justify-between items-center"><h2 className="text-3xl font-black uppercase tracking-tighter">Bilan Annuel {viewDate.getFullYear()}</h2></header>
+                                <header className="flex justify-between items-center"><h2 className="text-3xl font-black uppercase tracking-tighter text-white">Bilan Annuel {viewDate.getFullYear()}</h2></header>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-white">
                                     <StatCard isDarkMode={isDarkMode} title="Volume Annuel" value={`${(stats.year?.ca || 0).toLocaleString()} €`} iconName="BarChart" colorClass="bg-slate-400" />
                                     <StatCard isDarkMode={isDarkMode} title="Réel Encaissé" value={`${(stats.year?.bank || 0).toLocaleString()} €`} iconName="Banknote" colorClass="bg-teal-500" highlight={true} />
@@ -433,7 +457,7 @@
                                         </ResponsiveContainer>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-slate-100">
                                     {renderDonut("Répartition Annuelle", stats.year?.cat, CHART_COLORS)}
                                     {renderDonut("Lieux (An)", stats.year?.mod, ['#1e293b', '#2dd4bf'])}
                                     {renderDonut("CA Global Annuel", stats.year?.pay, ['#6366f1', '#fbbf24', '#2dd4bf'], true)}
@@ -459,12 +483,12 @@
                                         </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <button type="button" onClick={() => setFormData({...formData, isPaid: true})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${formData.isPaid ? 'bg-teal-500/20 text-teal-400 border-teal-500/50' : 'border-slate-800 text-slate-500'}`}>Payé</button>
-                                            <button type="button" onClick={() => setFormData({...formData, isPaid: false})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${!formData.isPaid ? 'bg-red-500 border-red-500 text-white shadow-lg' : 'border-slate-800 text-slate-500'}`}>À Encaisser</button>
+                                            <button type="button" onClick={() => setFormData({...formData, isPaid: false})} className={`py-3.5 rounded-xl border-2 transition-all font-black uppercase text-[10px] ${!formData.isPaid ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20' : 'border-slate-800 text-slate-500'}`}>À Encaisser</button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="space-y-2 text-white"><label className="text-[10px] font-black uppercase text-slate-500 ml-1">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 rounded-xl border font-black text-xs outline-none bg-slate-950 border-slate-800">{PAYMENT_METHODS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-                                        <div className="space-y-2 text-white"><label className="text-[10px] font-black uppercase text-slate-500 ml-1">Service</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-4 rounded-xl border font-black text-xs outline-none bg-slate-950 border-slate-800">{(categories || []).map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                                    <div className="grid grid-cols-2 gap-6 text-white">
+                                        <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 ml-1">Paiement</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full p-4 rounded-xl border font-black text-xs outline-none bg-slate-950 border-slate-800 text-white">{PAYMENT_METHODS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                                        <div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 ml-1">Service</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-4 rounded-xl border font-black text-xs outline-none bg-slate-950 border-slate-800 text-white">{(categories || []).map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                                     </div>
                                     <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Notes..." className={`w-full p-4 rounded-xl border font-medium text-sm outline-none h-24 bg-slate-950 border-slate-800 focus:border-teal-500 text-white`}/><div className="relative pt-6 border-t border-slate-800/40 text-center"><span className="absolute left-6 bottom-14 font-black text-teal-600 text-5xl opacity-40 italic">€</span><input type="number" step="0.01" required placeholder="0.00" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className={`w-full py-12 rounded-[2rem] border-2 text-7xl font-black text-center outline-none focus:border-teal-500 bg-slate-950 border-slate-800 text-white transition-all`} /></div><button type="submit" className="w-full py-7 rounded-[1.5rem] bg-teal-500 text-slate-950 font-black uppercase tracking-[0.4em] text-sm shadow-xl active:scale-95 transition-all">{editingId ? "Mettre à jour" : "Valider"}</button>
                                 </form>
@@ -476,20 +500,20 @@
                                 <header className="flex justify-between items-center px-4 border-b-2 border-slate-800/40 pb-6"><h2 className="text-3xl font-black uppercase tracking-tighter text-white">Journal Hebdomadaire</h2><div className="px-5 py-2.5 bg-slate-900 border-2 border-slate-700 rounded-2xl text-[10px] font-black text-teal-400 uppercase">{(stats.month?.ca || 0).toLocaleString()} €</div></header>
                                 {Object.entries(groupedWeeks).map(([wName, wSessions]) => wSessions.length > 0 && (
                                     <div key={wName} className="space-y-8">
-                                        <div className="flex justify-between items-center px-6 border-l-8 border-teal-500 bg-slate-900/60 py-4 rounded-r-2xl"><h3 className="text-md font-black uppercase tracking-[0.2em] text-slate-200">{wName}</h3><p className="text-sm font-black text-teal-400">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</p></div>
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div className="flex justify-between items-center px-6 border-l-8 border-teal-500 bg-slate-900/60 py-4 rounded-r-2xl text-slate-200"><h3 className="text-md font-black uppercase tracking-[0.2em]">{wName}</h3><p className="text-sm font-black text-teal-400">{wSessions.reduce((acc,s)=>acc+(parseFloat(s.amount)||0),0).toLocaleString()} €</p></div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-white">
                                             {wSessions.map(s => (
-                                                <div key={s.id} className={`p-8 rounded-[2rem] border-2 flex flex-col gap-6 shadow-xl transition-all group ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-teal-500 shadow-slate-200'}`}>
+                                                <div key={s.id} id={`session-${s.id}`} className={`p-8 rounded-[2rem] border-2 flex flex-col gap-6 shadow-xl transition-all group ${isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-teal-500 shadow-slate-200'}`}>
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex gap-5">
                                                             <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center text-teal-500 shadow-inner group-hover:scale-110 transition-transform"><Icon name={s.modality === 'Visio' ? 'Video' : (s.paymentMethod==='INAMI'?'Building2':'User')} size={26} /></div>
-                                                            <div className="space-y-2"><p className="text-lg font-black uppercase text-white leading-none">{s.clientName || 'Anonyme'}</p><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
+                                                            <div className="space-y-2 text-white leading-none"><p className="text-lg font-black uppercase leading-tight">{s.clientName || 'Anonyme'}</p><p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{s.category} • {s.cabinet} • {s.paymentMethod}</p></div>
                                                         </div>
-                                                        <div className="text-right"><p className="text-2xl font-black mb-3 tracking-tighter text-white">{parseFloat(s.amount).toLocaleString()}€</p><button onClick={()=>updateDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions', s.id),{isPaid:!s.isPaid})} className={`text-[9px] font-black uppercase px-4 py-2 rounded-xl border-2 transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 'bg-red-500 text-white border-red-600 shadow-lg'}`}>{s.isPaid ? 'ENCAISSÉ' : 'À PAYER'}</button></div>
+                                                        <div className="text-right text-white"><p className="text-2xl font-black mb-3 tracking-tighter">{parseFloat(s.amount).toLocaleString()}€</p><button onClick={()=>updateDoc(doc(db,'artifacts',appIdGlobal,'public', 'data', 'sessions', s.id),{isPaid:!s.isPaid})} className={`text-[9px] font-black uppercase px-4 py-2 rounded-xl border-2 transition-all ${s.isPaid ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20'}`}>{s.isPaid ? 'ENCAISSÉ' : 'À PAYER'}</button></div>
                                                     </div>
                                                     {s.notes && <div className="p-4 rounded-xl text-[11px] font-medium leading-relaxed italic bg-slate-950/50 text-slate-400 border-l-4 border-slate-700">{s.notes}</div>}
-                                                    <div className="flex justify-between items-center pt-5 border-t border-slate-800/40 text-white">
-                                                        <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'long'})}</p>
+                                                    <div className="flex justify-between items-center pt-5 border-t border-slate-800/40 text-slate-400">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest">{new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'long'})}</p>
                                                         <div className="flex gap-3">
                                                             <button onClick={()=>startEdit(s)} className="p-2 text-slate-600 hover:text-teal-400 hover:bg-teal-400/10 rounded-xl transition-all"><Icon name="Edit2" size={18}/></button>
                                                             <button onClick={()=>deleteDoc(doc(db,'artifacts',appIdGlobal,'public','data','sessions',s.id))} className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"><Icon name="Trash2" size={18}/></button>
@@ -505,22 +529,22 @@
 
                         {activeTab === 'settings' && (
                             <div className="max-w-xl mx-auto space-y-10 page-transition pt-10 pb-24 text-white">
-                                <h2 className="text-3xl font-black uppercase tracking-tighter text-center text-white">Réglages</h2>
+                                <h2 className="text-3xl font-black uppercase tracking-tighter text-center text-white leading-none">Réglages</h2>
                                 <div className={`p-10 rounded-[3rem] border-2 shadow-2xl space-y-12 bg-slate-900 border-slate-800`}>
                                     <div className="space-y-8">
                                         <h3 className="text-[10px] font-black uppercase text-teal-500 border-b-2 border-slate-800 pb-4">Apparence</h3>
-                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase text-slate-400">Mode Sombre Force</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode});}} className={`w-14 h-8 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
-                                        <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateSettings({zoomLevel})} className="w-full" /></div>
+                                        <div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Mode Sombre Force</label><button onClick={()=>{setIsDarkMode(!isDarkMode); updateSettings({isDarkMode: !isDarkMode});}} className={`w-14 h-8 rounded-full relative transition-all ${isDarkMode?'bg-teal-500':'bg-slate-300'}`}><div className={`absolute top-1.5 w-6 h-6 rounded-full bg-white shadow-xl transition-all ${isDarkMode?'left-8.5':'left-1.5'}`} /></button></div>
+                                        <div className="space-y-4 pt-4"><div className="flex items-center justify-between"><label className="text-xs font-black uppercase tracking-widest text-slate-400">Zoom Interface</label><span className="text-xs font-black text-teal-500">{zoomLevel}%</span></div><input type="range" min="80" max="150" value={zoomLevel} onChange={e=>setZoomLevel(parseInt(e.target.value))} onMouseUp={()=>updateSettings({zoomLevel})} className="w-full" /></div>
                                     </div>
-                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800">
+                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800 text-white">
                                         <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase text-teal-500">Cabinets</h3><button onClick={()=>{const n=[...cabinets, 'Nouveau']; setCabinets(n); updateSettings({cabinets:n});}} className="p-2 text-teal-500 hover:scale-110 transition-transform"><Icon name="Plus" size={20}/></button></div>
-                                        <div className="space-y-3 text-white">{cabinets.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...cabinets]; n[i]=e.target.value; setCabinets(n);}} onBlur={()=>updateSettings({cabinets})} className={`flex-1 p-4 rounded-xl border text-[11px] font-black uppercase bg-slate-950 border-slate-800 text-white outline-none focus:border-teal-500`}/><button onClick={()=>{const n=cabinets.filter((_,idx)=>idx!==i); setCabinets(n); updateSettings({cabinets:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl hover:bg-red-500/20"><Icon name="X" size={18}/></button></div>))}</div>
+                                        <div className="space-y-3">{cabinets.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...cabinets]; n[i]=e.target.value; setCabinets(n);}} onBlur={()=>updateSettings({cabinets})} className={`flex-1 p-4 rounded-xl border text-[11px] font-black uppercase bg-slate-950 border-slate-800 text-white outline-none focus:border-teal-500`}/><button onClick={()=>{const n=cabinets.filter((_,idx)=>idx!==i); setCabinets(n); updateSettings({cabinets:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl hover:bg-red-500/20"><Icon name="X" size={18}/></button></div>))}</div>
                                     </div>
-                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800">
+                                    <div className="space-y-6 pt-4 border-t-2 border-slate-800 text-white">
                                         <div className="flex items-center justify-between"><h3 className="text-[10px] font-black uppercase text-teal-500">Services</h3><button onClick={()=>{const n=[...categories, 'Nouveau']; setCategories(n); updateSettings({categories:n});}} className="p-2 text-teal-500 hover:scale-110 active:scale-95 transition-transform"><Icon name="Plus" size={20}/></button></div>
-                                        <div className="space-y-3 text-white">{categories.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...categories]; n[i]=e.target.value; setCategories(n);}} onBlur={()=>updateSettings({categories})} className={`flex-1 p-4 rounded-xl border text-[11px] font-black uppercase bg-slate-950 border-slate-800 text-white outline-none focus:border-teal-500`}/><button onClick={()=>{const n=categories.filter((_,idx)=>idx!==i); setCategories(n); updateSettings({categories:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl hover:bg-red-500/20"><Icon name="X" size={18}/></button></div>))}</div>
+                                        <div className="space-y-3">{categories.map((c, i) => (<div key={i} className="flex gap-3"><input type="text" value={c} onChange={e=>{const n=[...categories]; n[i]=e.target.value; setCategories(n);}} onBlur={()=>updateSettings({categories})} className={`flex-1 p-4 rounded-xl border text-[11px] font-black uppercase bg-slate-950 border-slate-800 text-white outline-none focus:border-teal-500`}/><button onClick={()=>{const n=categories.filter((_,idx)=>idx!==i); setCategories(n); updateSettings({categories:n});}} className="p-4 text-red-500 bg-red-500/10 border-2 border-red-500/20 rounded-2xl hover:bg-red-500/20"><Icon name="X" size={18}/></button></div>))}</div>
                                     </div>
-                                    <p className="text-[11px] text-slate-600 text-center font-black uppercase tracking-[0.4em] pt-8">AK MINDSTEP consult tracker v11.0</p>
+                                    <p className="text-[11px] text-slate-600 text-center font-black uppercase tracking-[0.4em] pt-8">AK MINDSTEP consult tracker v12.0</p>
                                 </div>
                             </div>
                         )}
